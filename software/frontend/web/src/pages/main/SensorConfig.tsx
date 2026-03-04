@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -21,6 +21,35 @@ import {
   SensorConfig as SensorConfigPayload,
   AISuggestRequest,
 } from '../../services/sensorService';
+import { estimateBatteryLifeDays, getSensorMetrics } from '../../utils/sensorConfig';
+
+type MetricThresholdInput = {
+  min: string;
+  max: string;
+  warningMin: string;
+  warningMax: string;
+};
+
+type MetricThresholdPayload = {
+  min?: number;
+  max?: number;
+  warning_min?: number;
+  warning_max?: number;
+};
+
+const toNumberOrUndefined = (value: string): number | undefined => {
+  if (!value || value.trim() === '') {
+    return undefined;
+  }
+  return Number(value);
+};
+
+const emptyMetricThresholdInput = (): MetricThresholdInput => ({
+  min: '',
+  max: '',
+  warningMin: '',
+  warningMax: '',
+});
 
 const SensorConfig: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -32,15 +61,31 @@ const SensorConfig: React.FC = () => {
 
   const [purpose, setPurpose] = useState('');
   const [friendlyName, setFriendlyName] = useState('');
-  const [thresholdMin, setThresholdMin] = useState('');
-  const [thresholdMax, setThresholdMax] = useState('');
-  const [warningMin, setWarningMin] = useState('');
-  const [warningMax, setWarningMax] = useState('');
+  const [metricThresholds, setMetricThresholds] = useState<Record<string, MetricThresholdInput>>({});
   const [reportsPerDay, setReportsPerDay] = useState('24');
-  const [batteryLifeDays, setBatteryLifeDays] = useState('30');
+  const [desiredBatteryLifeDays, setDesiredBatteryLifeDays] = useState('30');
   const [size, setSize] = useState('');
   const [measurementUnit, setMeasurementUnit] = useState('');
   const [readingFlowType, setReadingFlowType] = useState<'CONSTANT_PER_DAY' | 'TRIGGER'>('CONSTANT_PER_DAY');
+
+  const sensorMetrics = useMemo(() => getSensorMetrics(sensor?.type || ''), [sensor?.type]);
+  const estimatedBatteryLifeDays = estimateBatteryLifeDays(
+    parseInt(reportsPerDay) || 1,
+    sensorMetrics.length,
+    readingFlowType
+  );
+
+  useEffect(() => {
+    if (sensorMetrics.length === 0) return;
+
+    setMetricThresholds((current) => {
+      const next: Record<string, MetricThresholdInput> = {};
+      for (const metric of sensorMetrics) {
+        next[metric.key] = current[metric.key] || emptyMetricThresholdInput();
+      }
+      return next;
+    });
+  }, [sensorMetrics]);
 
   useEffect(() => {
     if (id) {
@@ -81,19 +126,27 @@ const SensorConfig: React.FC = () => {
 
       const request: AISuggestRequest = {
         purpose: enrichedPurpose,
-        desired_battery_life_days: batteryLifeDays ? parseInt(batteryLifeDays) : undefined,
+        desired_battery_life_days: desiredBatteryLifeDays ? parseInt(desiredBatteryLifeDays) : undefined,
       };
 
       const response = await getAISuggestedConfig(id, request);
       const config = response.suggested_config;
 
       setFriendlyName(config.friendly_name);
-      setThresholdMin(config.thresholds.min?.toString() || '');
-      setThresholdMax(config.thresholds.max?.toString() || '');
-      setWarningMin(config.thresholds.warning_min?.toString() || '');
-      setWarningMax(config.thresholds.warning_max?.toString() || '');
       setReportsPerDay(config.report_interval_per_day.toString());
-      setBatteryLifeDays(config.power_management.battery_life_days.toString());
+      setDesiredBatteryLifeDays(config.power_management.battery_life_days.toString());
+
+      const nextMetricThresholds: Record<string, MetricThresholdInput> = {};
+      for (const metric of sensorMetrics) {
+        const metricConfig = config.metric_thresholds?.[metric.key] || (sensorMetrics.length === 1 ? config.thresholds : undefined);
+        nextMetricThresholds[metric.key] = {
+          min: metricConfig?.min?.toString() || '',
+          max: metricConfig?.max?.toString() || '',
+          warningMin: metricConfig?.warning_min?.toString() || '',
+          warningMax: metricConfig?.warning_max?.toString() || '',
+        };
+      }
+      setMetricThresholds(nextMetricThresholds);
 
       alert(response.explanation || 'Configuration suggested based on your purpose');
     } catch (error: any) {
@@ -111,18 +164,40 @@ const SensorConfig: React.FC = () => {
 
     setSaving(true);
     try {
+      const reports = readingFlowType === 'TRIGGER' ? 1 : (reportsPerDay ? parseInt(reportsPerDay) : 24);
+      const metricThresholdPayload: Record<string, MetricThresholdPayload> = Object.fromEntries(
+        sensorMetrics.map((metric) => {
+          const values = metricThresholds[metric.key] || emptyMetricThresholdInput();
+          return [
+            metric.key,
+            {
+              min: toNumberOrUndefined(values.min),
+              max: toNumberOrUndefined(values.max),
+              warning_min: toNumberOrUndefined(values.warningMin),
+              warning_max: toNumberOrUndefined(values.warningMax),
+            },
+          ];
+        })
+      );
+
+      const primaryMetricKey = sensorMetrics[0]?.key;
+      const primaryMetricThreshold: MetricThresholdPayload = primaryMetricKey
+        ? metricThresholdPayload[primaryMetricKey] || {}
+        : {};
+
       const config: SensorConfigPayload = {
         friendly_name: friendlyName,
         thresholds: {
-          min: thresholdMin ? parseFloat(thresholdMin) : undefined,
-          max: thresholdMax ? parseFloat(thresholdMax) : undefined,
-          warning_min: warningMin ? parseFloat(warningMin) : undefined,
-          warning_max: warningMax ? parseFloat(warningMax) : undefined,
+          min: primaryMetricThreshold.min,
+          max: primaryMetricThreshold.max,
+          warning_min: primaryMetricThreshold.warning_min,
+          warning_max: primaryMetricThreshold.warning_max,
         },
-        report_interval_per_day: readingFlowType === 'TRIGGER' ? 1 : (reportsPerDay ? parseInt(reportsPerDay) : 24),
+        metric_thresholds: metricThresholdPayload,
+        report_interval_per_day: reports,
         power_management: {
-          battery_life_days: batteryLifeDays ? parseInt(batteryLifeDays) : 30,
-          sampling_frequency: readingFlowType === 'TRIGGER' ? 1 : (reportsPerDay ? parseInt(reportsPerDay) : 24),
+          battery_life_days: estimatedBatteryLifeDays,
+          sampling_frequency: reports,
         },
       };
 
@@ -234,53 +309,89 @@ const SensorConfig: React.FC = () => {
             required
           />
 
-          <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
-            Thresholds
-          </Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={6}>
-              <TextField
-                fullWidth
-                label="Min Value"
-                type="number"
-                value={thresholdMin}
-                onChange={(e) => setThresholdMin(e.target.value)}
-              />
-            </Grid>
-            <Grid item xs={6}>
-              <TextField
-                fullWidth
-                label="Max Value"
-                type="number"
-                value={thresholdMax}
-                onChange={(e) => setThresholdMax(e.target.value)}
-              />
-            </Grid>
-          </Grid>
+          {sensorMetrics.map((metric) => (
+            <Box key={metric.key} sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                {metric.label} Thresholds
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <TextField
+                    fullWidth
+                    label="Min Value"
+                    type="number"
+                    value={metricThresholds[metric.key]?.min || ''}
+                    onChange={(e) =>
+                      setMetricThresholds((current) => ({
+                        ...current,
+                        [metric.key]: {
+                          ...(current[metric.key] || emptyMetricThresholdInput()),
+                          min: e.target.value,
+                        },
+                      }))
+                    }
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <TextField
+                    fullWidth
+                    label="Max Value"
+                    type="number"
+                    value={metricThresholds[metric.key]?.max || ''}
+                    onChange={(e) =>
+                      setMetricThresholds((current) => ({
+                        ...current,
+                        [metric.key]: {
+                          ...(current[metric.key] || emptyMetricThresholdInput()),
+                          max: e.target.value,
+                        },
+                      }))
+                    }
+                  />
+                </Grid>
+              </Grid>
 
-          <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
-            Warning Thresholds (Optional)
-          </Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={6}>
-              <TextField
-                fullWidth
-                label="Warning Min"
-                type="number"
-                value={warningMin}
-                onChange={(e) => setWarningMin(e.target.value)}
-              />
-            </Grid>
-            <Grid item xs={6}>
-              <TextField
-                fullWidth
-                label="Warning Max"
-                type="number"
-                value={warningMax}
-                onChange={(e) => setWarningMax(e.target.value)}
-              />
-            </Grid>
-          </Grid>
+              <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
+                {metric.label} Warning Thresholds (Optional)
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <TextField
+                    fullWidth
+                    label="Warning Min"
+                    type="number"
+                    value={metricThresholds[metric.key]?.warningMin || ''}
+                    onChange={(e) =>
+                      setMetricThresholds((current) => ({
+                        ...current,
+                        [metric.key]: {
+                          ...(current[metric.key] || emptyMetricThresholdInput()),
+                          warningMin: e.target.value,
+                        },
+                      }))
+                    }
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <TextField
+                    fullWidth
+                    label="Warning Max"
+                    type="number"
+                    value={metricThresholds[metric.key]?.warningMax || ''}
+                    onChange={(e) =>
+                      setMetricThresholds((current) => ({
+                        ...current,
+                        [metric.key]: {
+                          ...(current[metric.key] || emptyMetricThresholdInput()),
+                          warningMax: e.target.value,
+                        },
+                      }))
+                    }
+                  />
+                </Grid>
+              </Grid>
+            </Box>
+          ))}
 
           <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
             Power Management
@@ -297,12 +408,21 @@ const SensorConfig: React.FC = () => {
           />
           <TextField
             fullWidth
-            label="Desired Battery Life (Days)"
+            label="Desired Battery Life For AI Suggestion (Days)"
             type="number"
-            value={batteryLifeDays}
-            onChange={(e) => setBatteryLifeDays(e.target.value)}
+            value={desiredBatteryLifeDays}
+            onChange={(e) => setDesiredBatteryLifeDays(e.target.value)}
             margin="normal"
-            helperText="How long you want the battery to last"
+            helperText="Optional target used by AI suggestion"
+          />
+          <TextField
+            fullWidth
+            label="Estimated Battery Life (Days)"
+            type="number"
+            value={estimatedBatteryLifeDays.toString()}
+            margin="normal"
+            InputProps={{ readOnly: true }}
+            helperText="Automatically calculated from reports/day and sensor metrics"
           />
         </Box>
 

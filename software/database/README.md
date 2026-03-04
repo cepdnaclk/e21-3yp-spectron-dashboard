@@ -16,6 +16,25 @@ psql --version
 
 If `psql` is not found, install PostgreSQL and add the PostgreSQL `bin` folder to `PATH`.
 
+## Team `.env` Setup
+
+This folder now includes:
+- `.env` (local shared defaults)
+- `.env.example` (template)
+
+Update `.env` for your machine if needed:
+
+```env
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=spectron
+DB_PASSWORD=spectron
+DB_NAME=spectron
+DATABASE_URL=postgres://spectron:spectron@localhost:5432/spectron?sslmode=disable
+```
+
+`check-db.ps1` reads this file automatically.
+
 ## Create Database and User (example)
 
 Open `psql` as superuser and run:
@@ -47,6 +66,12 @@ psql -U spectron -d spectron -f .\migrations\002_create_test_user.sql
 ## Verify Database
 
 Run the automated checker:
+
+```powershell
+.\check-db.ps1
+```
+
+Or override values explicitly:
 
 ```powershell
 .\check-db.ps1 -User spectron -Database spectron -Host localhost -Port 5432

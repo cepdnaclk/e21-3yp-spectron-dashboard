@@ -1,10 +1,8 @@
-# Frontend (Web + Mobile)
+# Frontend (Web + Capacitor)
 
-This folder contains both clients:
-- `web` (React web app)
-- `mobile` (Expo React Native app)
+Primary development flow is web-first in `web`, then package to native app using Capacitor.
 
-## Common Prerequisites
+## Prerequisites
 
 - Node.js 18+ (`node -v`)
 - npm (`npm -v`)
@@ -12,7 +10,7 @@ This folder contains both clients:
 
 ---
 
-## Web App (`frontend/web`)
+## Web Development (`frontend/web`)
 
 ### Setup
 
@@ -24,7 +22,7 @@ npm install
 Create `.env` file in `frontend/web`:
 
 ```env
-REACT_APP_API_URL=http://localhost:8080
+REACT_APP_API_URL=http://localhost:8081
 ```
 
 ### Run (development)
@@ -46,38 +44,8 @@ npm run cap:sync
 npm run cap:add:android
 ```
 
----
-
-## Mobile App (`frontend/mobile`)
-
-### Setup
-
-```powershell
-cd ..\mobile
-npm install
-```
-
-Make sure backend URL in `src/config/api.ts` points to your running backend.
-
-### Run Expo
-
-```powershell
-npm start
-```
-
-### Run Android
-
-```powershell
-npm run android
-```
-
-### Run iOS (macOS only)
-
-```powershell
-npm run ios
-```
-
 ## Notes
 
-- Start backend first, then web/mobile.
-- If using a physical phone, use your PC LAN IP instead of `localhost`.
+- Start backend first, then web app.
+- If backend runs on a different port, update `REACT_APP_API_URL`.
+- Use Capacitor after web UI is ready to produce the installable app.

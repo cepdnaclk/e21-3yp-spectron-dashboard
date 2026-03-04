@@ -129,22 +129,19 @@ func (h *SensorHandler) AISuggestConfig(w http.ResponseWriter, r *http.Request) 
 func (h *SensorHandler) generateAISuggestion(sensorType string, req models.AISuggestRequest) models.SensorConfig {
 	// Default values
 	reportsPerDay := 24
-	batteryLifeDays := 30
 
 	if req.DesiredBatteryLifeDays != nil {
-		batteryLifeDays = *req.DesiredBatteryLifeDays
+		desired := *req.DesiredBatteryLifeDays
+		if desired > 0 {
+			reportsPerDay = 720 / desired // 720 = 30 days * 24 reports
+		}
 	}
 
-	// Adjust reports per day based on battery life
-	if batteryLifeDays > 0 {
-		// Rough calculation: more battery life = fewer reports
-		reportsPerDay = 720 / batteryLifeDays // 720 = 30 days * 24 reports
-		if reportsPerDay < 1 {
-			reportsPerDay = 1
-		}
-		if reportsPerDay > 144 {
-			reportsPerDay = 144 // Max 144 reports per day (every 10 minutes)
-		}
+	if reportsPerDay < 1 {
+		reportsPerDay = 1
+	}
+	if reportsPerDay > 144 {
+		reportsPerDay = 144 // Max 144 reports per day (every 10 minutes)
 	}
 
 	// Generate friendly name from purpose
@@ -158,7 +155,9 @@ func (h *SensorHandler) generateAISuggestion(sensorType string, req models.AISug
 	}
 
 	// Default thresholds based on sensor type
+	metricThresholds := map[string]models.ThresholdConfig{}
 	var thresholds models.ThresholdConfig
+	metricCount := 1
 	switch sensorType {
 	case "temperature":
 		thresholds = models.ThresholdConfig{
@@ -167,6 +166,7 @@ func (h *SensorHandler) generateAISuggestion(sensorType string, req models.AISug
 			WarningMin: floatPtr(15.0),
 			WarningMax: floatPtr(28.0),
 		}
+		metricThresholds["temperature"] = thresholds
 	case "humidity":
 		thresholds = models.ThresholdConfig{
 			Min:        floatPtr(30.0),
@@ -174,24 +174,79 @@ func (h *SensorHandler) generateAISuggestion(sensorType string, req models.AISug
 			WarningMin: floatPtr(20.0),
 			WarningMax: floatPtr(80.0),
 		}
+		metricThresholds["humidity"] = thresholds
+	case "temperature_humidity", "temp_humidity", "dht11", "dht22":
+		metricCount = 2
+		metricThresholds["temperature"] = models.ThresholdConfig{
+			Min:        floatPtr(18.0),
+			Max:        floatPtr(25.0),
+			WarningMin: floatPtr(15.0),
+			WarningMax: floatPtr(28.0),
+		}
+		metricThresholds["humidity"] = models.ThresholdConfig{
+			Min:        floatPtr(30.0),
+			Max:        floatPtr(70.0),
+			WarningMin: floatPtr(20.0),
+			WarningMax: floatPtr(80.0),
+		}
+		thresholds = metricThresholds["temperature"]
 	case "ultrasonic":
 		thresholds = models.ThresholdConfig{
 			Max:        floatPtr(80.0), // 80% full
 			WarningMax: floatPtr(90.0),
 		}
+		metricThresholds["fill_level"] = thresholds
+	case "air_quality":
+		thresholds = models.ThresholdConfig{
+			Max:        floatPtr(120.0),
+			WarningMax: floatPtr(100.0),
+		}
+		metricThresholds["aqi"] = thresholds
 	default:
 		thresholds = models.ThresholdConfig{}
+		metricThresholds["value"] = thresholds
 	}
+
+	batteryLifeDays := estimateBatteryLifeDays(reportsPerDay, metricCount)
 
 	return models.SensorConfig{
 		FriendlyName:        friendlyName,
 		Thresholds:          thresholds,
+		MetricThresholds:    metricThresholds,
 		ReportIntervalPerDay: reportsPerDay,
 		PowerManagement: models.PowerManagementConfig{
 			BatteryLifeDays:  batteryLifeDays,
 			SamplingFrequency: reportsPerDay,
 		},
 	}
+}
+
+func estimateBatteryLifeDays(reportsPerDay int, metricCount int) int {
+	if reportsPerDay < 1 {
+		reportsPerDay = 1
+	}
+	if metricCount < 1 {
+		metricCount = 1
+	}
+
+	const batteryCapacityMah = 2400.0
+	const standbyMahPerDay = 2.0
+	const txMahPerReportPerMetric = 0.6
+
+	dailyConsumption := standbyMahPerDay + (float64(reportsPerDay) * float64(metricCount) * txMahPerReportPerMetric)
+	if dailyConsumption <= 0 {
+		return 365
+	}
+
+	batteryDays := int(batteryCapacityMah / dailyConsumption)
+	if batteryDays < 1 {
+		return 1
+	}
+	if batteryDays > 730 {
+		return 730
+	}
+
+	return batteryDays
 }
 
 func (h *SensorHandler) SaveConfig(w http.ResponseWriter, r *http.Request) {

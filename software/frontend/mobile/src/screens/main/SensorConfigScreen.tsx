@@ -34,6 +34,29 @@ import {
   SensorConfig,
   AISuggestRequest,
 } from '../../services/sensorService';
+import {estimateBatteryLifeDays, getSensorMetrics} from '../../utils/sensorConfig';
+
+type MetricThresholdInput = {
+  min: string;
+  max: string;
+  warningMin: string;
+  warningMax: string;
+};
+
+const emptyMetricThresholdInput = (): MetricThresholdInput => ({
+  min: '',
+  max: '',
+  warningMin: '',
+  warningMax: '',
+});
+
+const toNumberOrUndefined = (value: string): number | undefined => {
+  if (!value || value.trim() === '') {
+    return undefined;
+  }
+
+  return Number(value);
+};
 
 const SensorConfigScreen = () => {
   const theme = useTheme();
@@ -49,12 +72,30 @@ const SensorConfigScreen = () => {
   // Form fields
   const [purpose, setPurpose] = useState('');
   const [friendlyName, setFriendlyName] = useState('');
-  const [thresholdMin, setThresholdMin] = useState('');
-  const [thresholdMax, setThresholdMax] = useState('');
-  const [warningMin, setWarningMin] = useState('');
-  const [warningMax, setWarningMax] = useState('');
+  const [metricThresholds, setMetricThresholds] = useState<Record<string, MetricThresholdInput>>({});
   const [reportsPerDay, setReportsPerDay] = useState('');
-  const [batteryLifeDays, setBatteryLifeDays] = useState('');
+  const [desiredBatteryLifeDays, setDesiredBatteryLifeDays] = useState('');
+
+  const sensorMetrics = getSensorMetrics(sensor?.type || '');
+  const estimatedBatteryLifeDays = estimateBatteryLifeDays(
+    parseInt(reportsPerDay) || 1,
+    sensorMetrics.length,
+    'CONSTANT_PER_DAY',
+  );
+
+  useEffect(() => {
+    if (sensorMetrics.length === 0) {
+      return;
+    }
+
+    setMetricThresholds(current => {
+      const next: Record<string, MetricThresholdInput> = {};
+      for (const metric of sensorMetrics) {
+        next[metric.key] = current[metric.key] || emptyMetricThresholdInput();
+      }
+      return next;
+    });
+  }, [sensor?.type]);
 
   useEffect(() => {
     loadSensor();
@@ -84,8 +125,8 @@ const SensorConfigScreen = () => {
     try {
       const request: AISuggestRequest = {
         purpose: purpose,
-        desired_battery_life_days: batteryLifeDays
-          ? parseInt(batteryLifeDays)
+        desired_battery_life_days: desiredBatteryLifeDays
+          ? parseInt(desiredBatteryLifeDays)
           : undefined,
       };
 
@@ -94,14 +135,24 @@ const SensorConfigScreen = () => {
 
       // Fill form with AI suggestions
       setFriendlyName(config.friendly_name);
-      setThresholdMin(config.thresholds.min?.toString() || '');
-      setThresholdMax(config.thresholds.max?.toString() || '');
-      setWarningMin(config.thresholds.warning_min?.toString() || '');
-      setWarningMax(config.thresholds.warning_max?.toString() || '');
       setReportsPerDay(config.report_interval_per_day.toString());
-      setBatteryLifeDays(
+      setDesiredBatteryLifeDays(
         config.power_management.battery_life_days.toString(),
       );
+
+      const nextMetricThresholds: Record<string, MetricThresholdInput> = {};
+      for (const metric of sensorMetrics) {
+        const metricConfig =
+          config.metric_thresholds?.[metric.key] ||
+          (sensorMetrics.length === 1 ? config.thresholds : undefined);
+        nextMetricThresholds[metric.key] = {
+          min: metricConfig?.min?.toString() || '',
+          max: metricConfig?.max?.toString() || '',
+          warningMin: metricConfig?.warning_min?.toString() || '',
+          warningMax: metricConfig?.warning_max?.toString() || '',
+        };
+      }
+      setMetricThresholds(nextMetricThresholds);
 
       Alert.alert(
         'AI Suggestion',
@@ -125,22 +176,40 @@ const SensorConfigScreen = () => {
 
     setSaving(true);
     try {
+      const reports = reportsPerDay ? parseInt(reportsPerDay) : 24;
+      const metricThresholdPayload = Object.fromEntries(
+        sensorMetrics.map(metric => {
+          const values = metricThresholds[metric.key] || emptyMetricThresholdInput();
+          return [
+            metric.key,
+            {
+              min: toNumberOrUndefined(values.min),
+              max: toNumberOrUndefined(values.max),
+              warning_min: toNumberOrUndefined(values.warningMin),
+              warning_max: toNumberOrUndefined(values.warningMax),
+            },
+          ];
+        }),
+      );
+
+      const primaryMetricKey = sensorMetrics[0]?.key;
+      const primaryMetricThreshold = primaryMetricKey
+        ? metricThresholdPayload[primaryMetricKey]
+        : {};
+
       const config: SensorConfig = {
         friendly_name: friendlyName,
         thresholds: {
-          min: thresholdMin ? parseFloat(thresholdMin) : undefined,
-          max: thresholdMax ? parseFloat(thresholdMax) : undefined,
-          warning_min: warningMin ? parseFloat(warningMin) : undefined,
-          warning_max: warningMax ? parseFloat(warningMax) : undefined,
+          min: primaryMetricThreshold.min,
+          max: primaryMetricThreshold.max,
+          warning_min: primaryMetricThreshold.warning_min,
+          warning_max: primaryMetricThreshold.warning_max,
         },
-        report_interval_per_day: reportsPerDay
-          ? parseInt(reportsPerDay)
-          : 24,
+        metric_thresholds: metricThresholdPayload,
+        report_interval_per_day: reports,
         power_management: {
-          battery_life_days: batteryLifeDays
-            ? parseInt(batteryLifeDays)
-            : 30,
-          sampling_frequency: reportsPerDay ? parseInt(reportsPerDay) : 24,
+          battery_life_days: estimatedBatteryLifeDays,
+          sampling_frequency: reports,
         },
       };
 
@@ -241,51 +310,87 @@ const SensorConfigScreen = () => {
             placeholder="e.g., Living Room Temperature"
           />
 
-          <Text variant="bodySmall" style={styles.subsectionTitle}>
-            Thresholds
-          </Text>
+          {sensorMetrics.map(metric => (
+            <View key={metric.key}>
+              <Text variant="bodySmall" style={styles.subsectionTitle}>
+                {metric.label} Thresholds
+              </Text>
 
-          <View style={styles.row}>
-            <TextInput
-              label="Min Value"
-              value={thresholdMin}
-              onChangeText={setThresholdMin}
-              mode="outlined"
-              keyboardType="numeric"
-              style={[styles.input, styles.halfInput]}
-            />
-            <TextInput
-              label="Max Value"
-              value={thresholdMax}
-              onChangeText={setThresholdMax}
-              mode="outlined"
-              keyboardType="numeric"
-              style={[styles.input, styles.halfInput]}
-            />
-          </View>
+              <View style={styles.row}>
+                <TextInput
+                  label="Min Value"
+                  value={metricThresholds[metric.key]?.min || ''}
+                  onChangeText={value =>
+                    setMetricThresholds(current => ({
+                      ...current,
+                      [metric.key]: {
+                        ...(current[metric.key] || emptyMetricThresholdInput()),
+                        min: value,
+                      },
+                    }))
+                  }
+                  mode="outlined"
+                  keyboardType="numeric"
+                  style={[styles.input, styles.halfInput]}
+                />
+                <TextInput
+                  label="Max Value"
+                  value={metricThresholds[metric.key]?.max || ''}
+                  onChangeText={value =>
+                    setMetricThresholds(current => ({
+                      ...current,
+                      [metric.key]: {
+                        ...(current[metric.key] || emptyMetricThresholdInput()),
+                        max: value,
+                      },
+                    }))
+                  }
+                  mode="outlined"
+                  keyboardType="numeric"
+                  style={[styles.input, styles.halfInput]}
+                />
+              </View>
 
-          <Text variant="bodySmall" style={styles.subsectionTitle}>
-            Warning Thresholds (Optional)
-          </Text>
+              <Text variant="bodySmall" style={styles.subsectionTitle}>
+                {metric.label} Warning Thresholds (Optional)
+              </Text>
 
-          <View style={styles.row}>
-            <TextInput
-              label="Warning Min"
-              value={warningMin}
-              onChangeText={setWarningMin}
-              mode="outlined"
-              keyboardType="numeric"
-              style={[styles.input, styles.halfInput]}
-            />
-            <TextInput
-              label="Warning Max"
-              value={warningMax}
-              onChangeText={setWarningMax}
-              mode="outlined"
-              keyboardType="numeric"
-              style={[styles.input, styles.halfInput]}
-            />
-          </View>
+              <View style={styles.row}>
+                <TextInput
+                  label="Warning Min"
+                  value={metricThresholds[metric.key]?.warningMin || ''}
+                  onChangeText={value =>
+                    setMetricThresholds(current => ({
+                      ...current,
+                      [metric.key]: {
+                        ...(current[metric.key] || emptyMetricThresholdInput()),
+                        warningMin: value,
+                      },
+                    }))
+                  }
+                  mode="outlined"
+                  keyboardType="numeric"
+                  style={[styles.input, styles.halfInput]}
+                />
+                <TextInput
+                  label="Warning Max"
+                  value={metricThresholds[metric.key]?.warningMax || ''}
+                  onChangeText={value =>
+                    setMetricThresholds(current => ({
+                      ...current,
+                      [metric.key]: {
+                        ...(current[metric.key] || emptyMetricThresholdInput()),
+                        warningMax: value,
+                      },
+                    }))
+                  }
+                  mode="outlined"
+                  keyboardType="numeric"
+                  style={[styles.input, styles.halfInput]}
+                />
+              </View>
+            </View>
+          ))}
 
           <Text variant="bodySmall" style={styles.subsectionTitle}>
             Power Management
@@ -303,14 +408,21 @@ const SensorConfigScreen = () => {
           />
 
           <TextInput
-            label="Desired Battery Life (Days)"
-            value={batteryLifeDays}
-            onChangeText={setBatteryLifeDays}
+            label="Desired Battery Life For AI Suggestion (Days)"
+            value={desiredBatteryLifeDays}
+            onChangeText={setDesiredBatteryLifeDays}
             mode="outlined"
             keyboardType="numeric"
             style={styles.input}
             placeholder="30"
-            helperText="How long you want the battery to last"
+          />
+
+          <TextInput
+            label="Estimated Battery Life (Days)"
+            value={estimatedBatteryLifeDays.toString()}
+            mode="outlined"
+            style={styles.input}
+            editable={false}
           />
         </Surface>
 

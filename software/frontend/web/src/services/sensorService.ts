@@ -21,6 +21,12 @@ export interface SensorConfig {
     warning_min?: number;
     warning_max?: number;
   };
+  metric_thresholds?: Record<string, {
+    min?: number;
+    max?: number;
+    warning_min?: number;
+    warning_max?: number;
+  }>;
   report_interval_per_day: number;
   power_management: {
     battery_life_days: number;

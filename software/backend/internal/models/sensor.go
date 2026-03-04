@@ -21,6 +21,7 @@ type Sensor struct {
 type SensorConfig struct {
 	FriendlyName        string                 `json:"friendly_name"`
 	Thresholds          ThresholdConfig        `json:"thresholds"`
+	MetricThresholds    map[string]ThresholdConfig `json:"metric_thresholds,omitempty"`
 	ReportIntervalPerDay int                   `json:"report_interval_per_day"`
 	PowerManagement     PowerManagementConfig  `json:"power_management"`
 }

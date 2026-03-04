@@ -8,6 +8,48 @@ param(
     [int]$Port = 5432
 )
 
+function Import-DotEnvFile {
+    param([string]$Path)
+
+    if (-not (Test-Path $Path)) {
+        return
+    }
+
+    Get-Content $Path | ForEach-Object {
+        $line = $_.Trim()
+        if (-not $line -or $line.StartsWith('#')) {
+            return
+        }
+
+        $parts = $line.Split('=', 2)
+        if ($parts.Count -ne 2) {
+            return
+        }
+
+        $key = $parts[0].Trim()
+        $value = $parts[1].Trim().Trim('"').Trim("'")
+        if ($key) {
+            [System.Environment]::SetEnvironmentVariable($key, $value, 'Process')
+        }
+    }
+}
+
+$envFilePath = Join-Path $PSScriptRoot ".env"
+Import-DotEnvFile -Path $envFilePath
+
+if ($User -eq "spectron" -and $env:DB_USER) {
+    $User = $env:DB_USER
+}
+if ($Database -eq "spectron" -and $env:DB_NAME) {
+    $Database = $env:DB_NAME
+}
+if ($Host -eq "localhost" -and $env:DB_HOST) {
+    $Host = $env:DB_HOST
+}
+if ($Port -eq 5432 -and $env:DB_PORT) {
+    $Port = [int]$env:DB_PORT
+}
+
 Write-Host "Checking Spectron database..." -ForegroundColor Green
 Write-Host ""
 
@@ -31,10 +73,14 @@ $scriptPath = Join-Path $PSScriptRoot "check-db.sql"
 if (Test-Path $scriptPath) {
     Write-Host "Running verification script..." -ForegroundColor Yellow
     Write-Host ""
-    
-    $env:PGPASSWORD = Read-Host "Enter PostgreSQL password for user '$User'" -AsSecureString
-    $plainPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($env:PGPASSWORD))
-    $env:PGPASSWORD = $plainPassword
+
+    if ($env:DB_PASSWORD) {
+        $env:PGPASSWORD = $env:DB_PASSWORD
+    } else {
+        $securePassword = Read-Host "Enter PostgreSQL password for user '$User'" -AsSecureString
+        $plainPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword))
+        $env:PGPASSWORD = $plainPassword
+    }
     
     psql -U $User -h $Host -p $Port -d $Database -f $scriptPath
     
