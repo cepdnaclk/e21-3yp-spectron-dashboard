@@ -1,0 +1,69 @@
+# Database (PostgreSQL + TimescaleDB)
+
+This folder contains database migrations and DB verification scripts.
+
+## Prerequisites
+
+- PostgreSQL installed and running
+- `psql` client available in `PATH`
+- TimescaleDB extension installed (recommended)
+
+Check tools:
+
+```powershell
+psql --version
+```
+
+If `psql` is not found, install PostgreSQL and add the PostgreSQL `bin` folder to `PATH`.
+
+## Create Database and User (example)
+
+Open `psql` as superuser and run:
+
+```sql
+CREATE USER spectron WITH PASSWORD 'spectron';
+CREATE DATABASE spectron OWNER spectron;
+\c spectron
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS timescaledb;
+```
+
+> `timescaledb` is used for hypertable support on `sensor_readings`.
+
+## Run Migrations
+
+From this folder (`software/database`):
+
+```powershell
+psql -U spectron -d spectron -f .\migrations\001_init.sql
+```
+
+Optional test user seed:
+
+```powershell
+psql -U spectron -d spectron -f .\migrations\002_create_test_user.sql
+```
+
+## Verify Database
+
+Run the automated checker:
+
+```powershell
+.\check-db.ps1 -User spectron -Database spectron -Host localhost -Port 5432
+```
+
+Or open psql and inspect quickly:
+
+```sql
+\dt
+SELECT current_database(), current_user;
+SELECT extname FROM pg_extension WHERE extname IN ('timescaledb','pgcrypto');
+```
+
+## Important Note on TimescaleDB
+
+The migration `001_init.sql` will:
+- create a hypertable for `sensor_readings` when TimescaleDB exists,
+- otherwise keep a normal PostgreSQL table and create indexes.
+
+So the project can still run without TimescaleDB, but TimescaleDB is strongly recommended for time-series performance.
