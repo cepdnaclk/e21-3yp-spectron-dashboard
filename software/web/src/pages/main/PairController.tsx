@@ -1,0 +1,234 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Container,
+  Paper,
+  Typography,
+  TextField,
+  Button,
+  Box,
+  Alert,
+  CircularProgress,
+} from '@mui/material';
+import { pairController, Controller } from '../../services/controllerService';
+
+const PairController: React.FC = () => {
+  const navigate = useNavigate();
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanRafRef = useRef<number | null>(null);
+  const detectorRef = useRef<any>(null);
+  const [qrToken, setQrToken] = useState('');
+  const [pairedController, setPairedController] = useState<Controller | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [scanInfo, setScanInfo] = useState('');
+  const [isScannerSupported, setIsScannerSupported] = useState(false);
+  const [isCameraRunning, setIsCameraRunning] = useState(false);
+
+  useEffect(() => {
+    const barcodeDetector = (window as any).BarcodeDetector;
+    setIsScannerSupported(Boolean(barcodeDetector));
+    if (barcodeDetector) {
+      detectorRef.current = new barcodeDetector({ formats: ['qr_code'] });
+    }
+
+    return () => {
+      stopCamera();
+    };
+  }, []);
+
+  const stopCamera = () => {
+    if (scanRafRef.current) {
+      cancelAnimationFrame(scanRafRef.current);
+      scanRafRef.current = null;
+    }
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+
+    setIsCameraRunning(false);
+  };
+
+  const scanFrame = async () => {
+    if (!videoRef.current || !detectorRef.current || !isCameraRunning) {
+      return;
+    }
+
+    try {
+      const barcodes = await detectorRef.current.detect(videoRef.current);
+      if (barcodes.length > 0) {
+        const value = (barcodes[0].rawValue || '').trim();
+        if (value) {
+          setQrToken(value);
+          setScanInfo(`Scanned QR ID: ${value}`);
+          stopCamera();
+          return;
+        }
+      }
+    } catch (scanError) {
+      setError('Scanner is running but could not read the QR code yet. Try better lighting.');
+    }
+
+    scanRafRef.current = requestAnimationFrame(scanFrame);
+  };
+
+  const startCamera = async () => {
+    setError('');
+    setScanInfo('');
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'environment',
+        },
+        audio: false,
+      });
+
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+
+      setIsCameraRunning(true);
+      scanRafRef.current = requestAnimationFrame(scanFrame);
+    } catch (cameraError) {
+      setError('Unable to access camera. You can still enter the controller ID manually.');
+    }
+  };
+
+  const handlePair = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError('');
+
+    if (!qrToken.trim()) {
+      setError('Please scan or enter a valid QR controller ID.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const controller = await pairController({ qr_token: qrToken.trim() });
+      setPairedController(controller);
+    } catch (err: any) {
+      const responseData = err?.response?.data;
+      const message =
+        typeof responseData === 'string'
+          ? responseData
+          : responseData?.message || 'Failed to pair controller. Please try again.';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConfigure = () => {
+    if (!pairedController) {
+      return;
+    }
+    navigate(`/controllers/${pairedController.id}`);
+  };
+
+  return (
+    <Container maxWidth="sm" sx={{ py: 3 }}>
+      <Paper elevation={3} sx={{ p: 3 }}>
+        <Typography variant="h5" gutterBottom>
+          Scan Controller QR
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Scan the QR code on the controller and enter the ID below. This will assign the controller
+          to your account.
+        </Typography>
+
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+
+        {!pairedController ? (
+          <Box component="form" onSubmit={handlePair}>
+            {isScannerSupported ? (
+              <Box sx={{ mb: 2 }}>
+                {!isCameraRunning ? (
+                  <Button variant="outlined" fullWidth onClick={startCamera}>
+                    Start Camera Scanner
+                  </Button>
+                ) : (
+                  <Button variant="outlined" color="secondary" fullWidth onClick={stopCamera}>
+                    Stop Camera Scanner
+                  </Button>
+                )}
+                <Box
+                  sx={{
+                    mt: 1,
+                    borderRadius: 1,
+                    overflow: 'hidden',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    display: isCameraRunning ? 'block' : 'none',
+                  }}
+                >
+                  <video ref={videoRef} style={{ width: '100%', maxHeight: 280 }} muted playsInline />
+                </Box>
+              </Box>
+            ) : (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Camera QR scanning is not supported in this browser. Enter the controller ID manually.
+              </Alert>
+            )}
+
+            {scanInfo && (
+              <Alert severity="success" sx={{ mb: 2 }}>
+                {scanInfo}
+              </Alert>
+            )}
+
+            <TextField
+              fullWidth
+              label="Controller QR ID"
+              value={qrToken}
+              onChange={(e) => setQrToken(e.target.value)}
+              placeholder="e.g., CTRL-8F2A19"
+              disabled={loading}
+              required
+            />
+            <Button
+              type="submit"
+              variant="contained"
+              fullWidth
+              sx={{ mt: 2 }}
+              disabled={loading}
+            >
+              {loading ? <CircularProgress size={24} /> : 'Pair Controller'}
+            </Button>
+          </Box>
+        ) : (
+          <Box>
+            <Alert severity="success" sx={{ mb: 2 }}>
+              Controller paired successfully.
+            </Alert>
+            <Typography variant="body1" sx={{ mb: 1 }}>
+              Next step: fix the controller and sensors in place, then power them on.
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Once powered, click Configure to view this controller and set up connected sensors.
+            </Typography>
+            <Button variant="contained" fullWidth onClick={handleConfigure}>
+              Configure
+            </Button>
+          </Box>
+        )}
+      </Paper>
+    </Container>
+  );
+};
+
+export default PairController;
