@@ -210,12 +210,12 @@ func (h *SensorHandler) generateAISuggestion(sensorType string, req models.AISug
 	batteryLifeDays := estimateBatteryLifeDays(reportsPerDay, metricCount)
 
 	return models.SensorConfig{
-		FriendlyName:        friendlyName,
-		Thresholds:          thresholds,
-		MetricThresholds:    metricThresholds,
+		FriendlyName:         friendlyName,
+		Thresholds:           thresholds,
+		MetricThresholds:     metricThresholds,
 		ReportIntervalPerDay: reportsPerDay,
 		PowerManagement: models.PowerManagementConfig{
-			BatteryLifeDays:  batteryLifeDays,
+			BatteryLifeDays:   batteryLifeDays,
 			SamplingFrequency: reportsPerDay,
 		},
 	}
