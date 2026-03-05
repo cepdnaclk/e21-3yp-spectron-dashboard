@@ -21,9 +21,11 @@ npm install
 2. Set environment variables:
 Create a `.env` file:
 ```
-REACT_APP_API_URL=http://localhost:8080
+REACT_APP_API_URL=http://localhost:8081
 REACT_APP_DEMO_MODE=false
 ```
+
+If your backend runs on a different port (for example `8080`), set `REACT_APP_API_URL` accordingly.
 
 ### Temporary Demo Mode
 

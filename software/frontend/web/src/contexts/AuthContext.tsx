@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getCurrentUser, login as loginService, register as registerService, logout as logoutService, User, LoginRequest, RegisterRequest } from '../services/authService';
+import { getToken } from '../services/api';
 
 interface AuthContextType {
   user: User | null;
@@ -30,6 +31,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const checkAuth = async () => {
+    if (!getToken()) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
     try {
       const currentUser = await getCurrentUser();
       setUser(currentUser);

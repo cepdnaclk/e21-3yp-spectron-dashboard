@@ -1,4 +1,4 @@
-import api, { setToken, removeToken } from './api';
+import api, { setToken, removeToken, getToken } from './api';
 import { API_ENDPOINTS } from '../config/api';
 
 export interface LoginRequest {
@@ -31,6 +31,11 @@ export interface User {
     name: string;
     role: 'OWNER' | 'ADMIN' | 'VIEWER';
   }>;
+}
+
+interface TokenPayload {
+  user_id?: string;
+  email?: string;
 }
 
 type MeResponse =
@@ -83,8 +88,31 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
 };
 
 export const getCurrentUser = async (): Promise<User> => {
-  const response = await api.get<MeResponse>(API_ENDPOINTS.AUTH.ME);
-  return normalizeUser(response.data);
+  const token = getToken();
+
+  if (!token) {
+    throw new Error('No authentication token');
+  }
+
+  const parts = token.split('.');
+  if (parts.length < 2) {
+    throw new Error('Invalid authentication token');
+  }
+
+  const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+  const normalizedPayload = payloadBase64.padEnd(Math.ceil(payloadBase64.length / 4) * 4, '=');
+
+  const payload = JSON.parse(atob(normalizedPayload)) as TokenPayload;
+
+  if (!payload.user_id || !payload.email) {
+    throw new Error('Invalid authentication token payload');
+  }
+
+  return {
+    id: payload.user_id,
+    email: payload.email,
+    accounts: [],
+  };
 };
 
 export const logout = async (): Promise<void> => {
