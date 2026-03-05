@@ -161,7 +161,7 @@ type geminiGenerateRequest struct {
 		} `json:"parts"`
 	} `json:"contents"`
 	GenerationConfig struct {
-		ResponseMIMEType string `json:"responseMimeType,omitempty"`
+		ResponseMIMEType string  `json:"responseMimeType,omitempty"`
 		Temperature      float64 `json:"temperature,omitempty"`
 	} `json:"generationConfig,omitempty"`
 }
@@ -177,11 +177,11 @@ type geminiGenerateResponse struct {
 }
 
 type hostedAISuggestion struct {
-	FriendlyName         string                             `json:"friendly_name"`
-	ReportIntervalPerDay int                                `json:"report_interval_per_day"`
-	Thresholds           models.ThresholdConfig             `json:"thresholds"`
-	MetricThresholds     map[string]models.ThresholdConfig  `json:"metric_thresholds"`
-	Explanation          string                             `json:"explanation"`
+	FriendlyName         string                            `json:"friendly_name"`
+	ReportIntervalPerDay int                               `json:"report_interval_per_day"`
+	Thresholds           models.ThresholdConfig            `json:"thresholds"`
+	MetricThresholds     map[string]models.ThresholdConfig `json:"metric_thresholds"`
+	Explanation          string                            `json:"explanation"`
 }
 
 func (h *SensorHandler) generateHostedAISuggestion(ctx context.Context, sensorType string, req models.AISuggestRequest) (models.SensorConfig, string, error) {
