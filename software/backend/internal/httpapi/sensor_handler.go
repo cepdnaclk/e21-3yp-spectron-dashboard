@@ -1,9 +1,18 @@
 package httpapi
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"math/rand"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -44,7 +53,9 @@ func (h *SensorHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := h.db.Query(r.Context(), `
-		SELECT id, controller_id, hw_id, type, name, purpose, unit, status, last_seen
+		SELECT id, controller_id, hw_id, type, name, purpose, unit, status,
+			EXISTS(SELECT 1 FROM sensor_configs sc WHERE sc.sensor_id = sensors.id AND sc.active = true) AS config_active,
+			last_seen
 		FROM sensors
 		WHERE controller_id = $1
 		ORDER BY last_seen DESC NULLS LAST, hw_id ASC
@@ -58,7 +69,7 @@ func (h *SensorHandler) List(w http.ResponseWriter, r *http.Request) {
 	var sensors []models.Sensor
 	for rows.Next() {
 		var s models.Sensor
-		err := rows.Scan(&s.ID, &s.ControllerID, &s.HWID, &s.Type, &s.Name, &s.Purpose, &s.Unit, &s.Status, &s.LastSeen)
+		err := rows.Scan(&s.ID, &s.ControllerID, &s.HWID, &s.Type, &s.Name, &s.Purpose, &s.Unit, &s.Status, &s.ConfigActive, &s.LastSeen)
 		if err != nil {
 			continue
 		}
@@ -79,11 +90,13 @@ func (h *SensorHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	var s models.Sensor
 	err = h.db.QueryRow(r.Context(), `
-		SELECT s.id, s.controller_id, s.hw_id, s.type, s.name, s.purpose, s.unit, s.status, s.last_seen
+		SELECT s.id, s.controller_id, s.hw_id, s.type, s.name, s.purpose, s.unit, s.status,
+			EXISTS(SELECT 1 FROM sensor_configs sc WHERE sc.sensor_id = s.id AND sc.active = true) AS config_active,
+			s.last_seen
 		FROM sensors s
 		JOIN controllers c ON s.controller_id = c.id
 		WHERE s.id = $1 AND c.account_id = $2
-	`, sensorID, accountID).Scan(&s.ID, &s.ControllerID, &s.HWID, &s.Type, &s.Name, &s.Purpose, &s.Unit, &s.Status, &s.LastSeen)
+	`, sensorID, accountID).Scan(&s.ID, &s.ControllerID, &s.HWID, &s.Type, &s.Name, &s.Purpose, &s.Unit, &s.Status, &s.ConfigActive, &s.LastSeen)
 	if err != nil {
 		http.Error(w, "sensor not found", http.StatusNotFound)
 		return
@@ -115,15 +128,364 @@ func (h *SensorHandler) AISuggestConfig(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Simple AI suggestion logic (in production, this would call an AI service)
-	suggestedConfig := h.generateAISuggestion(sensorType, req)
+	var suggestedConfig models.SensorConfig
+	explanation := "Configuration suggested based on your purpose and sensor type."
+
+	hostedConfig, hostedExplanation, hostedErr := h.generateHostedAISuggestion(r.Context(), sensorType, req)
+	if hostedErr == nil {
+		suggestedConfig = hostedConfig
+		if hostedExplanation != "" {
+			explanation = hostedExplanation
+		} else {
+			explanation = "Configuration suggested by hosted AI model."
+		}
+	} else {
+		// Fallback to deterministic local suggestion if hosted AI is unavailable.
+		log.Printf("hosted AI unavailable, using fallback: %v", hostedErr)
+		suggestedConfig = h.generateAISuggestion(sensorType, req)
+		explanation = fmt.Sprintf("Configuration suggested by local fallback logic (%v).", hostedErr)
+	}
 
 	response := models.AISuggestResponse{
 		SuggestedConfig: suggestedConfig,
-		Explanation:     "Configuration suggested based on your purpose and sensor type.",
+		Explanation:     explanation,
 	}
 
 	json.NewEncoder(w).Encode(response)
+}
+
+type geminiGenerateRequest struct {
+	Contents []struct {
+		Parts []struct {
+			Text string `json:"text"`
+		} `json:"parts"`
+	} `json:"contents"`
+	GenerationConfig struct {
+		ResponseMIMEType string `json:"responseMimeType,omitempty"`
+		Temperature      float64 `json:"temperature,omitempty"`
+	} `json:"generationConfig,omitempty"`
+}
+
+type geminiGenerateResponse struct {
+	Candidates []struct {
+		Content struct {
+			Parts []struct {
+				Text string `json:"text"`
+			} `json:"parts"`
+		} `json:"content"`
+	} `json:"candidates"`
+}
+
+type hostedAISuggestion struct {
+	FriendlyName         string                             `json:"friendly_name"`
+	ReportIntervalPerDay int                                `json:"report_interval_per_day"`
+	Thresholds           models.ThresholdConfig             `json:"thresholds"`
+	MetricThresholds     map[string]models.ThresholdConfig  `json:"metric_thresholds"`
+	Explanation          string                             `json:"explanation"`
+}
+
+func (h *SensorHandler) generateHostedAISuggestion(ctx context.Context, sensorType string, req models.AISuggestRequest) (models.SensorConfig, string, error) {
+	apiKey := strings.TrimSpace(os.Getenv("GEMINI_API_KEY"))
+	provider := strings.ToLower(strings.TrimSpace(os.Getenv("AI_PROVIDER")))
+
+	if apiKey == "" || (provider != "" && provider != "gemini") {
+		return models.SensorConfig{}, "", fmt.Errorf("hosted AI not configured")
+	}
+
+	model := strings.TrimSpace(os.Getenv("GEMINI_MODEL"))
+	if model == "" {
+		model = "gemini-2.0-flash-lite"
+	}
+
+	baseURL := strings.TrimSpace(os.Getenv("GEMINI_API_BASE_URL"))
+	if baseURL == "" {
+		baseURL = "https://generativelanguage.googleapis.com/v1beta"
+	}
+	baseURL = normalizeGeminiBaseURL(baseURL)
+
+	prompt := fmt.Sprintf(`You are an IoT sensor configuration assistant.
+Generate JSON only for this sensor setup.
+
+Sensor type: %s
+User purpose: %s
+
+Rules:
+- Return strict JSON object with keys:
+  friendly_name (string),
+  report_interval_per_day (integer 1-144),
+  thresholds (object with optional min,max,warning_min,warning_max numbers),
+  metric_thresholds (object map where each key has same threshold shape),
+  explanation (string).
+- For temperature_humidity sensors, include metric_thresholds for both temperature and humidity.
+- Keep values practical for real monitoring.
+- Do not include markdown or code fences.
+`, sensorType, req.Purpose)
+
+	geminiReq := geminiGenerateRequest{}
+	geminiReq.Contents = []struct {
+		Parts []struct {
+			Text string `json:"text"`
+		} `json:"parts"`
+	}{
+		{
+			Parts: []struct {
+				Text string `json:"text"`
+			}{
+				{Text: prompt},
+			},
+		},
+	}
+	geminiReq.GenerationConfig.ResponseMIMEType = "application/json"
+	geminiReq.GenerationConfig.Temperature = 0.2
+
+	body, err := json.Marshal(geminiReq)
+	if err != nil {
+		return models.SensorConfig{}, "", err
+	}
+
+	candidateModels := buildGeminiCandidateModels(model)
+	seen := map[string]bool{}
+	orderedModels := make([]string, 0, len(candidateModels))
+	for _, m := range candidateModels {
+		m = normalizeGeminiModelName(m)
+		if m == "" || seen[m] {
+			continue
+		}
+		seen[m] = true
+		orderedModels = append(orderedModels, m)
+	}
+
+	var respBody []byte
+	var selectedModel string
+	var lastErr error
+	for _, candidate := range orderedModels {
+		candidateRespBody, callErr := callGeminiGenerate(ctx, baseURL, apiKey, candidate, body)
+		if callErr == nil {
+			respBody = candidateRespBody
+			selectedModel = candidate
+			lastErr = nil
+			break
+		}
+
+		lastErr = callErr
+		errText := strings.ToLower(callErr.Error())
+		if !(strings.Contains(errText, "404") || strings.Contains(errText, "429")) {
+			break
+		}
+	}
+
+	if lastErr != nil {
+		return models.SensorConfig{}, "", lastErr
+	}
+
+	var geminiResp geminiGenerateResponse
+	if err := json.Unmarshal(respBody, &geminiResp); err != nil {
+		return models.SensorConfig{}, "", err
+	}
+
+	if len(geminiResp.Candidates) == 0 || len(geminiResp.Candidates[0].Content.Parts) == 0 {
+		return models.SensorConfig{}, "", fmt.Errorf("empty gemini response")
+	}
+
+	text := strings.TrimSpace(geminiResp.Candidates[0].Content.Parts[0].Text)
+	jsonText := extractJSONObject(text)
+	if jsonText == "" {
+		return models.SensorConfig{}, "", fmt.Errorf("gemini response did not contain valid JSON")
+	}
+	var suggestion hostedAISuggestion
+	if err := json.Unmarshal([]byte(jsonText), &suggestion); err != nil {
+		return models.SensorConfig{}, "", err
+	}
+
+	if suggestion.ReportIntervalPerDay < 1 {
+		suggestion.ReportIntervalPerDay = 1
+	}
+	if suggestion.ReportIntervalPerDay > 144 {
+		suggestion.ReportIntervalPerDay = 144
+	}
+
+	if strings.TrimSpace(suggestion.FriendlyName) == "" {
+		suggestion.FriendlyName = "Sensor"
+	}
+
+	metricThresholds := suggestion.MetricThresholds
+	if metricThresholds == nil {
+		metricThresholds = map[string]models.ThresholdConfig{}
+	}
+
+	metricCount := len(metricThresholds)
+	if metricCount == 0 {
+		if sensorType == "temperature_humidity" || sensorType == "temp_humidity" || sensorType == "dht11" || sensorType == "dht22" {
+			metricCount = 2
+		} else {
+			metricCount = 1
+		}
+	}
+
+	thresholds := suggestion.Thresholds
+	if thresholds == (models.ThresholdConfig{}) {
+		for _, cfg := range metricThresholds {
+			thresholds = cfg
+			break
+		}
+	}
+
+	config := models.SensorConfig{
+		FriendlyName:         suggestion.FriendlyName,
+		Thresholds:           thresholds,
+		MetricThresholds:     metricThresholds,
+		ReportIntervalPerDay: suggestion.ReportIntervalPerDay,
+		PowerManagement: models.PowerManagementConfig{
+			BatteryLifeDays:   estimateBatteryLifeDays(suggestion.ReportIntervalPerDay, metricCount),
+			SamplingFrequency: suggestion.ReportIntervalPerDay,
+		},
+	}
+
+	explanation := suggestion.Explanation
+	if explanation == "" {
+		explanation = fmt.Sprintf("Configuration suggested by hosted AI model (%s).", selectedModel)
+	}
+
+	return config, explanation, nil
+}
+
+func normalizeGeminiModelName(model string) string {
+	trimmed := strings.TrimSpace(model)
+	trimmed = strings.TrimPrefix(trimmed, "models/")
+	trimmed = strings.TrimPrefix(trimmed, "/models/")
+	trimmed = strings.TrimPrefix(trimmed, "v1beta/models/")
+	trimmed = strings.TrimPrefix(trimmed, "/v1beta/models/")
+	if idx := strings.Index(trimmed, ":"); idx > 0 {
+		trimmed = trimmed[:idx]
+	}
+	return strings.TrimSpace(trimmed)
+}
+
+func normalizeGeminiBaseURL(baseURL string) string {
+	trimmed := strings.TrimSpace(baseURL)
+	if trimmed == "" {
+		return "https://generativelanguage.googleapis.com/v1beta"
+	}
+
+	if idx := strings.Index(strings.ToLower(trimmed), "/models/"); idx > 0 {
+		trimmed = trimmed[:idx]
+	}
+
+	if idx := strings.Index(trimmed, "?"); idx > 0 {
+		trimmed = trimmed[:idx]
+	}
+
+	return strings.TrimRight(trimmed, "/")
+}
+
+func buildGeminiCandidateModels(envModel string) []string {
+	normalizedEnv := normalizeGeminiModelName(envModel)
+	return []string{
+		normalizedEnv,
+		"gemini-2.5-flash",
+		"gemini-2.5-flash-latest",
+		"gemini-2.5-flash-001",
+		"gemini-2.0-flash",
+		"gemini-2.0-flash-001",
+		"gemini-2.0-flash-lite",
+		"gemini-2.0-flash-lite-001",
+		"gemini-1.5-flash",
+		"gemini-1.5-flash-latest",
+	}
+}
+
+func callGeminiGenerate(ctx context.Context, baseURL string, apiKey string, model string, requestBody []byte) ([]byte, error) {
+	url := fmt.Sprintf("%s/models/%s:generateContent?key=%s", strings.TrimRight(baseURL, "/"), normalizeGeminiModelName(model), apiKey)
+	httpClient := &http.Client{Timeout: 20 * time.Second}
+
+	maxAttempts := 6
+	backoff := 1 * time.Second
+
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(requestBody))
+		if err != nil {
+			return nil, err
+		}
+		httpReq.Header.Set("Content-Type", "application/json")
+
+		httpResp, err := httpClient.Do(httpReq)
+		if err != nil {
+			if attempt == maxAttempts {
+				return nil, err
+			}
+			time.Sleep(backoff + time.Duration(rand.Intn(500))*time.Millisecond)
+			backoff *= 2
+			continue
+		}
+
+		respBody, readErr := io.ReadAll(httpResp.Body)
+		httpResp.Body.Close()
+		if readErr != nil {
+			if attempt == maxAttempts {
+				return nil, readErr
+			}
+			time.Sleep(backoff + time.Duration(rand.Intn(500))*time.Millisecond)
+			backoff *= 2
+			continue
+		}
+
+		if httpResp.StatusCode >= 200 && httpResp.StatusCode < 300 {
+			return respBody, nil
+		}
+
+		status := httpResp.StatusCode
+		bodySnippet := strings.TrimSpace(string(respBody))
+		if len(bodySnippet) > 300 {
+			bodySnippet = bodySnippet[:300]
+		}
+
+		if (status == http.StatusTooManyRequests || status >= 500) && attempt < maxAttempts {
+			retryAfter := retryAfterDuration(httpResp.Header.Get("Retry-After"))
+			if retryAfter <= 0 {
+				retryAfter = backoff + time.Duration(rand.Intn(500))*time.Millisecond
+				backoff *= 2
+			}
+			time.Sleep(retryAfter)
+			continue
+		}
+
+		return nil, fmt.Errorf("gemini api error for model %s: %s | %s", model, httpResp.Status, bodySnippet)
+	}
+
+	return nil, fmt.Errorf("gemini api error for model %s: exhausted retries", model)
+}
+
+func retryAfterDuration(value string) time.Duration {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return 0
+	}
+
+	if seconds, err := strconv.Atoi(trimmed); err == nil && seconds > 0 {
+		return time.Duration(seconds) * time.Second
+	}
+
+	return 0
+}
+
+func extractJSONObject(input string) string {
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
+		return ""
+	}
+
+	trimmed = strings.TrimPrefix(trimmed, "```json")
+	trimmed = strings.TrimPrefix(trimmed, "```")
+	trimmed = strings.TrimSuffix(trimmed, "```")
+	trimmed = strings.TrimSpace(trimmed)
+
+	start := strings.Index(trimmed, "{")
+	end := strings.LastIndex(trimmed, "}")
+	if start == -1 || end == -1 || end <= start {
+		return ""
+	}
+
+	return strings.TrimSpace(trimmed[start : end+1])
 }
 
 func (h *SensorHandler) generateAISuggestion(sensorType string, req models.AISuggestRequest) models.SensorConfig {
@@ -285,14 +647,26 @@ func (h *SensorHandler) SaveConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Save config
-	_, err = h.db.Exec(r.Context(), `
-		INSERT INTO sensor_configs (sensor_id, config_json, active)
-		VALUES ($1, $2, true)
-		ON CONFLICT (sensor_id) DO UPDATE SET config_json = $2, active = true
+	result, err := h.db.Exec(r.Context(), `
+		UPDATE sensor_configs
+		SET config_json = $2, active = true
+		WHERE sensor_id = $1 AND active = true
 	`, sensorID, configJSON)
 	if err != nil {
 		http.Error(w, "failed to save config", http.StatusInternalServerError)
 		return
+	}
+
+	if result.RowsAffected() == 0 {
+		configID := uuid.New()
+		_, err = h.db.Exec(r.Context(), `
+			INSERT INTO sensor_configs (id, sensor_id, config_json, active)
+			VALUES ($1, $2, $3, true)
+		`, configID, sensorID, configJSON)
+		if err != nil {
+			http.Error(w, "failed to save config", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	// Update sensor name and purpose

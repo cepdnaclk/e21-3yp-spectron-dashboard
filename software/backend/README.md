@@ -2,6 +2,13 @@
 
 This folder contains the Go backend API and backend utility scripts.
 
+## Folder Layout
+
+- `cmd/` → Go entry points (`api`, utilities)
+- `internal/` → core backend packages
+- `scripts/` → operational/test PowerShell scripts
+- root `*.ps1` files → compatibility wrappers that call `scripts/`
+
 ## Prerequisites
 
 - Go 1.21+ installed and available in `PATH`
@@ -64,11 +71,13 @@ $env:HTTP_PORT="8080"
 
 ## Helpful Scripts in This Folder
 
-- `create-test-user.ps1`
-- `test-login.ps1`
-- `test-registration.ps1`
-- `test-get-users.ps1`
-- `get-users-simple.ps1`
+- `scripts/create-test-user.ps1`
+- `scripts/test-login.ps1`
+- `scripts/test-registration.ps1`
+- `scripts/test-get-users.ps1`
+- `scripts/get-users-simple.ps1`
+
+You can still run legacy root commands (for example `./test-login.ps1`) because wrappers are kept for compatibility.
 
 Run example:
 

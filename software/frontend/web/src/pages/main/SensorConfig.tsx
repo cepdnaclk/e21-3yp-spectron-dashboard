@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -63,10 +63,8 @@ const SensorConfig: React.FC = () => {
   const [friendlyName, setFriendlyName] = useState('');
   const [metricThresholds, setMetricThresholds] = useState<Record<string, MetricThresholdInput>>({});
   const [reportsPerDay, setReportsPerDay] = useState('24');
-  const [desiredBatteryLifeDays, setDesiredBatteryLifeDays] = useState('30');
-  const [size, setSize] = useState('');
-  const [measurementUnit, setMeasurementUnit] = useState('');
   const [readingFlowType, setReadingFlowType] = useState<'CONSTANT_PER_DAY' | 'TRIGGER'>('CONSTANT_PER_DAY');
+  const initializedSensorIdRef = useRef<string | null>(null);
 
   const sensorMetrics = useMemo(() => getSensorMetrics(sensor?.type || ''), [sensor?.type]);
   const estimatedBatteryLifeDays = estimateBatteryLifeDays(
@@ -87,25 +85,33 @@ const SensorConfig: React.FC = () => {
     });
   }, [sensorMetrics]);
 
-  useEffect(() => {
-    if (id) {
-      loadSensor();
-    }
-  }, [id]);
-
-  const loadSensor = async () => {
+  const loadSensor = useCallback(async () => {
     if (!id) return;
     try {
       const sensorData = await getSensor(id);
       setSensor(sensorData);
-      setPurpose(sensorData.purpose || '');
-      setFriendlyName(sensorData.name || '');
+
+      if (initializedSensorIdRef.current !== id) {
+        setPurpose(sensorData.purpose || '');
+        setFriendlyName(sensorData.name || '');
+        initializedSensorIdRef.current = id;
+      }
     } catch (error) {
       console.error('Error loading sensor:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    initializedSensorIdRef.current = null;
+  }, [id]);
+
+  useEffect(() => {
+    if (id) {
+      loadSensor();
+    }
+  }, [id, loadSensor]);
 
   const handleAISuggest = async () => {
     if (!id || !purpose.trim()) {
@@ -115,18 +121,8 @@ const SensorConfig: React.FC = () => {
 
     setAiLoading(true);
     try {
-      const enrichedPurpose = [
-        purpose,
-        size ? `Target size/dimension: ${size}` : '',
-        measurementUnit ? `Measurement unit: ${measurementUnit}` : '',
-        `Reading flow type: ${readingFlowType === 'TRIGGER' ? 'trigger-based' : 'constant per day'}`,
-      ]
-        .filter(Boolean)
-        .join('. ');
-
       const request: AISuggestRequest = {
-        purpose: enrichedPurpose,
-        desired_battery_life_days: desiredBatteryLifeDays ? parseInt(desiredBatteryLifeDays) : undefined,
+        purpose,
       };
 
       const response = await getAISuggestedConfig(id, request);
@@ -134,7 +130,6 @@ const SensorConfig: React.FC = () => {
 
       setFriendlyName(config.friendly_name);
       setReportsPerDay(config.report_interval_per_day.toString());
-      setDesiredBatteryLifeDays(config.power_management.battery_life_days.toString());
 
       const nextMetricThresholds: Record<string, MetricThresholdInput> = {};
       for (const metric of sensorMetrics) {
@@ -247,43 +242,9 @@ const SensorConfig: React.FC = () => {
             rows={4}
             value={purpose}
             onChange={(e) => setPurpose(e.target.value)}
-            placeholder="e.g., Monitor garbage bin fill level and odor for a 120L outdoor bin"
+            placeholder="e.g., Monitor garbage bin fill level and odor for a 120L outdoor bin using cm level readings"
             sx={{ mt: 1 }}
           />
-
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Size / Dimension"
-                value={size}
-                onChange={(e) => setSize(e.target.value)}
-                placeholder="e.g., 120"
-              />
-            </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Measurement Unit"
-                value={measurementUnit}
-                onChange={(e) => setMeasurementUnit(e.target.value)}
-                placeholder="e.g., liters, cm, m²"
-              />
-            </Grid>
-          </Grid>
-
-          <FormControl fullWidth sx={{ mt: 2 }}>
-            <InputLabel id="reading-flow-type-label">Reading Flow Type</InputLabel>
-            <Select
-              labelId="reading-flow-type-label"
-              value={readingFlowType}
-              label="Reading Flow Type"
-              onChange={(e) => setReadingFlowType(e.target.value as 'CONSTANT_PER_DAY' | 'TRIGGER')}
-            >
-              <MenuItem value="CONSTANT_PER_DAY">Constant readings per day</MenuItem>
-              <MenuItem value="TRIGGER">Trigger-based readings</MenuItem>
-            </Select>
-          </FormControl>
 
           <Button
             variant="contained"
@@ -394,8 +355,20 @@ const SensorConfig: React.FC = () => {
           ))}
 
           <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
-            Power Management
+            Reading & Power Settings
           </Typography>
+          <FormControl fullWidth sx={{ mt: 1 }}>
+            <InputLabel id="reading-flow-type-label">Reading Flow Type</InputLabel>
+            <Select
+              labelId="reading-flow-type-label"
+              value={readingFlowType}
+              label="Reading Flow Type"
+              onChange={(e) => setReadingFlowType(e.target.value as 'CONSTANT_PER_DAY' | 'TRIGGER')}
+            >
+              <MenuItem value="CONSTANT_PER_DAY">Constant readings per day</MenuItem>
+              <MenuItem value="TRIGGER">Trigger-based readings</MenuItem>
+            </Select>
+          </FormControl>
           <TextField
             fullWidth
             label="Reports Per Day"
@@ -405,15 +378,6 @@ const SensorConfig: React.FC = () => {
             margin="normal"
             disabled={readingFlowType === 'TRIGGER'}
             helperText="How many times per day the sensor should send data"
-          />
-          <TextField
-            fullWidth
-            label="Desired Battery Life For AI Suggestion (Days)"
-            type="number"
-            value={desiredBatteryLifeDays}
-            onChange={(e) => setDesiredBatteryLifeDays(e.target.value)}
-            margin="normal"
-            helperText="Optional target used by AI suggestion"
           />
           <TextField
             fullWidth

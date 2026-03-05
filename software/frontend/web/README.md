@@ -22,7 +22,18 @@ npm install
 Create a `.env` file:
 ```
 REACT_APP_API_URL=http://localhost:8080
+REACT_APP_DEMO_MODE=false
 ```
+
+### Temporary Demo Mode
+
+For full presentation data (controllers, sensors, monitoring trends, alerts), set:
+
+```env
+REACT_APP_DEMO_MODE=true
+```
+
+This mode is temporary and can be removed later by deleting `src/data/demoData.ts` and demo branches in service files.
 
 3. Run the app:
 ```bash

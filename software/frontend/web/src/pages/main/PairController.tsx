@@ -12,6 +12,41 @@ import {
 } from '@mui/material';
 import { pairController, Controller } from '../../services/controllerService';
 
+const normalizeControllerToken = (value: string): string => {
+  const raw = (value || '').trim();
+  if (!raw) {
+    return '';
+  }
+
+  const directMatch = raw.match(/CTRL-[A-Z0-9-]+/i);
+  if (directMatch) {
+    return directMatch[0].toUpperCase();
+  }
+
+  try {
+    const url = new URL(raw);
+    const fromQuery =
+      url.searchParams.get('id') ||
+      url.searchParams.get('qr') ||
+      url.searchParams.get('qr_token') ||
+      url.searchParams.get('hw_id') ||
+      '';
+
+    if (fromQuery) {
+      return normalizeControllerToken(fromQuery);
+    }
+
+    const fromPath = url.pathname.split('/').filter(Boolean).pop() || '';
+    if (fromPath) {
+      return normalizeControllerToken(fromPath);
+    }
+  } catch {
+    // Not a URL - use raw token fallback below.
+  }
+
+  return raw.toUpperCase();
+};
+
 const PairController: React.FC = () => {
   const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -64,7 +99,7 @@ const PairController: React.FC = () => {
     try {
       const barcodes = await detectorRef.current.detect(videoRef.current);
       if (barcodes.length > 0) {
-        const value = (barcodes[0].rawValue || '').trim();
+        const value = normalizeControllerToken((barcodes[0].rawValue || '').trim());
         if (value) {
           setQrToken(value);
           setScanInfo(`Scanned QR ID: ${value}`);
@@ -108,14 +143,17 @@ const PairController: React.FC = () => {
     event.preventDefault();
     setError('');
 
-    if (!qrToken.trim()) {
+    const normalizedToken = normalizeControllerToken(qrToken);
+
+    if (!normalizedToken) {
       setError('Please scan or enter a valid QR controller ID.');
       return;
     }
 
     setLoading(true);
     try {
-      const controller = await pairController({ qr_token: qrToken.trim() });
+      const controller = await pairController({ qr_token: normalizedToken });
+      setQrToken(normalizedToken);
       setPairedController(controller);
     } catch (err: any) {
       const responseData = err?.response?.data;

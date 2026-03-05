@@ -2,6 +2,11 @@
 
 Primary development flow is web-first in `web`, then package to native app using Capacitor.
 
+## Folder Layout
+
+- `web/` → active React app + Capacitor setup
+- `legacy/mobile-expo/` → archived Expo app (not the current primary flow)
+
 ## Prerequisites
 
 - Node.js 18+ (`node -v`)

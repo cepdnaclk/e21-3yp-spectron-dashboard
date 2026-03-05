@@ -1,5 +1,13 @@
+/**
+ * Sensor Service
+ * 
+ * Handles operations related to sensors and their configurations.
+ */
+
 import api from './api';
-import { API_ENDPOINTS } from '../config/api';
+import {API_ENDPOINTS} from '../config/api';
+import {USE_MOCK_DATA} from '../config/api';
+import * as mockApi from './mockApi';
 
 export interface Sensor {
   id: string;
@@ -10,17 +18,7 @@ export interface Sensor {
   purpose?: string;
   unit?: string;
   status: 'OK' | 'OFFLINE' | 'ERROR';
-  config_active?: boolean;
   last_seen?: string;
-}
-
-export interface SensorReading {
-  time: string;
-  value?: number;
-  avg_value?: number;
-  min_value?: number;
-  max_value?: number;
-  meta?: Record<string, unknown>;
 }
 
 export interface SensorConfig {
@@ -57,44 +55,56 @@ export interface AISuggestResponse {
   explanation: string;
 }
 
+/**
+ * Get all sensors for a controller
+ */
 export const getSensors = async (controllerId: string): Promise<Sensor[]> => {
-  const response = await api.get<Sensor[]>(API_ENDPOINTS.SENSORS.LIST(controllerId));
-  return response.data;
+  if (USE_MOCK_DATA) {
+    return mockApi.mockSensorService.getSensors(controllerId);
+  }
+  const response = await api.get<Sensor[]>(
+    API_ENDPOINTS.SENSORS.LIST(controllerId),
+  );
+  return response;
 };
 
+/**
+ * Get single sensor by ID
+ */
 export const getSensor = async (id: string): Promise<Sensor> => {
+  if (USE_MOCK_DATA) {
+    return mockApi.mockSensorService.getSensor(id);
+  }
   const response = await api.get<Sensor>(API_ENDPOINTS.SENSORS.GET(id));
-  return response.data;
+  return response;
 };
 
+/**
+ * Get AI-suggested configuration for a sensor
+ */
 export const getAISuggestedConfig = async (
   sensorId: string,
-  request: AISuggestRequest
+  request: AISuggestRequest,
 ): Promise<AISuggestResponse> => {
+  if (USE_MOCK_DATA) {
+    return mockApi.mockSensorService.getAISuggestedConfig(sensorId, request);
+  }
   const response = await api.post<AISuggestResponse>(
     API_ENDPOINTS.SENSORS.AI_SUGGEST(sensorId),
-    request
+    request,
   );
-  return response.data;
+  return response;
 };
 
+/**
+ * Save sensor configuration
+ */
 export const saveSensorConfig = async (
   sensorId: string,
-  config: SensorConfig
+  config: SensorConfig,
 ): Promise<void> => {
-  await api.post(API_ENDPOINTS.SENSORS.CONFIG(sensorId), config);
-};
-
-export const getSensorReadings = async (
-  sensorId: string,
-  params?: {
-    from?: string;
-    to?: string;
-    interval?: string;
+  if (USE_MOCK_DATA) {
+    return mockApi.mockSensorService.saveSensorConfig(sensorId, config);
   }
-): Promise<SensorReading[]> => {
-  const response = await api.get<SensorReading[]>(API_ENDPOINTS.READINGS.GET(sensorId), {
-    params,
-  });
-  return response.data;
+  await api.post(API_ENDPOINTS.SENSORS.CONFIG(sensorId), config);
 };

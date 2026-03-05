@@ -2,6 +2,13 @@
 
 This folder contains database migrations and DB verification scripts.
 
+## Folder Layout
+
+- `migrations/` → schema and seed SQL migrations
+- `scripts/` → database utility scripts (`check-db*.ps1`, `check-db.sql`)
+- `docs/` → extra reference docs
+- root `check-db*.ps1` → compatibility wrappers to `scripts/`
+
 ## Prerequisites
 
 - PostgreSQL installed and running

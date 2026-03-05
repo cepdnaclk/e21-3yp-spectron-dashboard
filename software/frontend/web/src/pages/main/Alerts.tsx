@@ -9,11 +9,11 @@ import {
   CircularProgress,
   Button,
 } from '@mui/material';
-import { getAlerts, acknowledgeAlert, Alert } from '../../services/alertService';
+import { getAlerts, acknowledgeAlert, Alert as AlertItem } from '../../services/alertService';
 import { format } from 'date-fns';
 
 const Alerts: React.FC = () => {
-  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
