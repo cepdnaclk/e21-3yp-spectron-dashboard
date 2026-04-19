@@ -7,8 +7,13 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $projectRoot = Split-Path -Parent $scriptDir
 Set-Location $projectRoot
 
-if (-not $env:DATABASE_URL) {
+if (-not $env:DATABASE_URL -and -not $env:DB_HOST) {
     $env:DATABASE_URL = "postgres://spectron:spectron@localhost:5432/spectron?sslmode=disable"
+    Write-Host "DATABASE_URL not set. Using local default database." -ForegroundColor Yellow
+} elseif ($env:DATABASE_URL) {
+    Write-Host "Using DATABASE_URL from environment." -ForegroundColor Yellow
+} else {
+    Write-Host "Using DB_* environment variables from environment." -ForegroundColor Yellow
 }
 
 try {

@@ -13,13 +13,17 @@ import {
   MenuItem,
   Select,
   CircularProgress,
+  Alert,
+  Stack,
 } from '@mui/material';
-import { getSensor, Sensor } from '../../services/sensorService';
 import {
+  getSensor,
+  Sensor,
   getAISuggestedConfig,
   saveSensorConfig,
   SensorConfig as SensorConfigPayload,
   AISuggestRequest,
+  SensorContext,
 } from '../../services/sensorService';
 import { estimateBatteryLifeDays, getSensorMetrics } from '../../utils/sensorConfig';
 
@@ -37,11 +41,22 @@ type MetricThresholdPayload = {
   warning_max?: number;
 };
 
+type SetupMode = 'manual' | 'ai_assisted';
+
+type AiDraftSummary = {
+  explanation: string;
+  warnings: string[];
+  confidenceScore: number;
+  requiresUserConfirmation: boolean;
+};
+
 const toNumberOrUndefined = (value: string): number | undefined => {
   if (!value || value.trim() === '') {
     return undefined;
   }
-  return Number(value);
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
 };
 
 const emptyMetricThresholdInput = (): MetricThresholdInput => ({
@@ -51,6 +66,19 @@ const emptyMetricThresholdInput = (): MetricThresholdInput => ({
   warningMax: '',
 });
 
+const toPositiveIntOrUndefined = (value: string): number | undefined => {
+  if (!value || value.trim() === '') {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return undefined;
+  }
+
+  return Math.round(parsed);
+};
+
 const SensorConfig: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -59,16 +87,30 @@ const SensorConfig: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
 
+  const [setupMode, setSetupMode] = useState<SetupMode>('manual');
   const [purpose, setPurpose] = useState('');
+  const [domain, setDomain] = useState('');
+  const [environmentType, setEnvironmentType] = useState('');
+  const [indoorOutdoor, setIndoorOutdoor] = useState('');
+  const [assetType, setAssetType] = useState('');
+  const [locationCountry, setLocationCountry] = useState('');
+  const [locationRegion, setLocationRegion] = useState('');
+  const [locationLabel, setLocationLabel] = useState('');
+  const [historicalWindowDays, setHistoricalWindowDays] = useState('14');
+  const [installationNotes, setInstallationNotes] = useState('');
   const [friendlyName, setFriendlyName] = useState('');
   const [metricThresholds, setMetricThresholds] = useState<Record<string, MetricThresholdInput>>({});
   const [reportsPerDay, setReportsPerDay] = useState('24');
   const [readingFlowType, setReadingFlowType] = useState<'CONSTANT_PER_DAY' | 'TRIGGER'>('CONSTANT_PER_DAY');
+  const [validationStatus, setValidationStatus] = useState('');
+  const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [aiDraftSummary, setAiDraftSummary] = useState<AiDraftSummary | null>(null);
   const initializedSensorIdRef = useRef<string | null>(null);
 
   const sensorMetrics = useMemo(() => getSensorMetrics(sensor?.type || ''), [sensor?.type]);
   const estimatedBatteryLifeDays = estimateBatteryLifeDays(
-    parseInt(reportsPerDay) || 1,
+    parseInt(reportsPerDay, 10) || 1,
     sensorMetrics.length,
     readingFlowType
   );
@@ -87,17 +129,30 @@ const SensorConfig: React.FC = () => {
 
   const loadSensor = useCallback(async () => {
     if (!id) return;
+
     try {
+      setPageError(null);
       const sensorData = await getSensor(id);
       setSensor(sensorData);
 
       if (initializedSensorIdRef.current !== id) {
         setPurpose(sensorData.purpose || '');
         setFriendlyName(sensorData.name || '');
+        setDomain(sensorData.context?.domain || '');
+        setEnvironmentType(sensorData.context?.environment_type || '');
+        setIndoorOutdoor(sensorData.context?.indoor_outdoor || '');
+        setAssetType(sensorData.context?.asset_type || '');
+        setLocationCountry(sensorData.context?.location?.country || '');
+        setLocationRegion(sensorData.context?.location?.region || '');
+        setLocationLabel(sensorData.context?.location?.label || '');
+        setHistoricalWindowDays(sensorData.context?.historical_window_days?.toString() || '14');
+        setInstallationNotes(sensorData.context?.installation_notes || '');
+        setSetupMode(sensorData.purpose ? 'ai_assisted' : 'manual');
         initializedSensorIdRef.current = id;
       }
     } catch (error) {
       console.error('Error loading sensor:', error);
+      setPageError('Failed to load sensor data.');
     } finally {
       setLoading(false);
     }
@@ -113,27 +168,74 @@ const SensorConfig: React.FC = () => {
     }
   }, [id, loadSensor]);
 
+  const buildContextPayload = (): SensorContext | undefined => {
+    const historicalDays = toPositiveIntOrUndefined(historicalWindowDays);
+
+    const payload: SensorContext = {
+      domain: domain || undefined,
+      environment_type: environmentType || undefined,
+      indoor_outdoor: indoorOutdoor || undefined,
+      asset_type: assetType.trim() || undefined,
+      installation_notes: installationNotes.trim() || undefined,
+      historical_window_days: historicalDays,
+      location: locationCountry.trim() || locationRegion.trim() || locationLabel.trim()
+        ? {
+            mode: 'manual',
+            country: locationCountry.trim() || undefined,
+            region: locationRegion.trim() || undefined,
+            label: locationLabel.trim() || undefined,
+          }
+        : undefined,
+    };
+
+    if (
+      !payload.domain &&
+      !payload.environment_type &&
+      !payload.indoor_outdoor &&
+      !payload.asset_type &&
+      !payload.installation_notes &&
+      !payload.historical_window_days &&
+      !payload.location
+    ) {
+      return undefined;
+    }
+
+    return payload;
+  };
+
   const handleAISuggest = async () => {
     if (!id || !purpose.trim()) {
-      alert('Please enter a purpose description first');
+      setPageError('Add a short purpose before asking AI for setup help.');
       return;
     }
 
     setAiLoading(true);
+    setPageError(null);
     try {
       const request: AISuggestRequest = {
         purpose,
+        context: buildContextPayload(),
       };
 
       const response = await getAISuggestedConfig(id, request);
-      const config = response.suggested_config;
+      const config = response.validated_config || response.suggested_config;
 
       setFriendlyName(config.friendly_name);
       setReportsPerDay(config.report_interval_per_day.toString());
+      setValidationStatus(response.validation_status || '');
+      setValidationWarnings(response.warnings || []);
+      setAiDraftSummary({
+        explanation: response.explanation || 'AI drafted a starting configuration based on your purpose and context.',
+        warnings: response.warnings || [],
+        confidenceScore: response.confidence_score,
+        requiresUserConfirmation: response.requires_user_confirmation,
+      });
 
       const nextMetricThresholds: Record<string, MetricThresholdInput> = {};
       for (const metric of sensorMetrics) {
-        const metricConfig = config.metric_thresholds?.[metric.key] || (sensorMetrics.length === 1 ? config.thresholds : undefined);
+        const metricConfig =
+          config.metric_thresholds?.[metric.key] ||
+          (sensorMetrics.length === 1 ? config.thresholds : undefined);
         nextMetricThresholds[metric.key] = {
           min: metricConfig?.min?.toString() || '',
           max: metricConfig?.max?.toString() || '',
@@ -142,24 +244,27 @@ const SensorConfig: React.FC = () => {
         };
       }
       setMetricThresholds(nextMetricThresholds);
-
-      alert(response.explanation || 'Configuration suggested based on your purpose');
     } catch (error: any) {
-      alert(error.response?.data?.message || 'Failed to get AI suggestion');
+      setPageError(error.response?.data?.message || 'Failed to get AI setup help.');
     } finally {
       setAiLoading(false);
     }
   };
 
   const handleSave = async () => {
-    if (!id || !friendlyName.trim()) {
-      alert('Please enter a sensor name');
+    if (!id || !sensor) {
+      return;
+    }
+
+    if (!friendlyName.trim()) {
+      setPageError('Please enter a sensor name before saving.');
       return;
     }
 
     setSaving(true);
+    setPageError(null);
     try {
-      const reports = readingFlowType === 'TRIGGER' ? 1 : (reportsPerDay ? parseInt(reportsPerDay) : 24);
+      const reports = readingFlowType === 'TRIGGER' ? 1 : (reportsPerDay ? parseInt(reportsPerDay, 10) : 24);
       const metricThresholdPayload: Record<string, MetricThresholdPayload> = Object.fromEntries(
         sensorMetrics.map((metric) => {
           const values = metricThresholds[metric.key] || emptyMetricThresholdInput();
@@ -181,7 +286,7 @@ const SensorConfig: React.FC = () => {
         : {};
 
       const config: SensorConfigPayload = {
-        friendly_name: friendlyName,
+        friendly_name: friendlyName.trim(),
         thresholds: {
           min: primaryMetricThreshold.min,
           max: primaryMetricThreshold.max,
@@ -196,15 +301,37 @@ const SensorConfig: React.FC = () => {
         },
       };
 
-      await saveSensorConfig(id, config);
-      alert('Sensor configuration saved!');
-      navigate(-1);
+      const response = await saveSensorConfig(id, {
+        purpose: purpose.trim(),
+        context: buildContextPayload(),
+        config,
+      });
+
+      navigate(`/controllers/${sensor.controller_id}`, {
+        replace: true,
+        state: {
+          configurationSaved: true,
+          configuredSensorId: sensor.id,
+          configuredSensorName: response.validated_config.friendly_name,
+          validationWarnings: response.warnings || [],
+          observationMessage:
+            response.observation?.message ||
+            'The system is now observing live readings and can suggest refinements later.',
+        },
+      });
     } catch (error: any) {
-      alert(error.response?.data?.message || 'Failed to save configuration');
+      setPageError(error.response?.data?.message || 'Failed to save configuration.');
     } finally {
       setSaving(false);
     }
   };
+
+  const observationSeverity =
+    sensor?.observation?.status === 'ready_for_review'
+      ? 'success'
+      : sensor?.observation?.status === 'awaiting_data'
+        ? 'warning'
+        : 'info';
 
   if (loading) {
     return (
@@ -229,32 +356,250 @@ const SensorConfig: React.FC = () => {
           Configure {sensor.type} Sensor
         </Typography>
 
+        {sensor.config_active && sensor.observation && (
+          <Alert severity={observationSeverity} sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+              Current observation status
+            </Typography>
+            <Typography variant="body2">{sensor.observation.message}</Typography>
+          </Alert>
+        )}
+
+        {sensor.calibration_status === 'OVERDUE' && (
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            This sensor is overdue for calibration. The backend will still validate the configuration,
+            but you should review thresholds carefully before using them for automation.
+          </Alert>
+        )}
+
+        {pageError && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {pageError}
+          </Alert>
+        )}
+
+        {validationWarnings.length > 0 && (
+          <Alert severity={validationStatus === 'adjusted' ? 'warning' : 'info'} sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              {validationStatus ? `Validation status: ${validationStatus}` : 'Validation feedback'}
+            </Typography>
+            <Box component="ul" sx={{ pl: 2, mb: 0 }}>
+              {validationWarnings.map((warning) => (
+                <li key={warning}>
+                  <Typography variant="body2">{warning}</Typography>
+                </li>
+              ))}
+            </Box>
+          </Alert>
+        )}
+
         <Box sx={{ mt: 3 }}>
           <Typography variant="subtitle1" gutterBottom>
-            Purpose Description
+            Setup Mode
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Manual setup is the default. AI support is optional and only helps draft a starting
+            configuration that you can still adjust before saving.
+          </Typography>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 2 }}>
+            <Button
+              variant={setupMode === 'manual' ? 'contained' : 'outlined'}
+              onClick={() => setSetupMode('manual')}
+            >
+              Manual Setup
+            </Button>
+            <Button
+              variant={setupMode === 'ai_assisted' ? 'contained' : 'outlined'}
+              onClick={() => setSetupMode('ai_assisted')}
+            >
+              AI Support
+            </Button>
+          </Stack>
+          <Alert severity={setupMode === 'manual' ? 'info' : 'success'} sx={{ mt: 2 }}>
+            {setupMode === 'manual'
+              ? 'Enter threshold values directly and save whenever you are ready. The sensor becomes configured immediately.'
+              : 'Use AI support to prefill values from your purpose and context, then review and edit anything before saving.'}
+          </Alert>
+        </Box>
+
+        <Box sx={{ mt: 3 }}>
+          <Typography variant="subtitle1" gutterBottom>
+            Context
           </Typography>
           <Typography variant="body2" color="text.secondary" gutterBottom>
-            Describe what this sensor will be used for (e.g., "Monitor temperature in the living room")
+            Optional but recommended. These details help with AI suggestions now and with better
+            improvement recommendations after live data starts coming in.
           </Typography>
-          <TextField
-            fullWidth
-            multiline
-            rows={4}
-            value={purpose}
-            onChange={(e) => setPurpose(e.target.value)}
-            placeholder="e.g., Monitor garbage bin fill level and odor for a 120L outdoor bin using cm level readings"
-            sx={{ mt: 1 }}
-          />
 
-          <Button
-            variant="contained"
-            onClick={handleAISuggest}
-            disabled={aiLoading || !purpose.trim()}
-            sx={{ mt: 2 }}
-          >
-            {aiLoading ? 'Getting AI Suggestion...' : 'Get AI Suggestion'}
-          </Button>
+          <Grid container spacing={2} sx={{ mt: 0.5 }}>
+            <Grid item xs={12} md={4}>
+              <FormControl fullWidth>
+                <InputLabel id="domain-label">Domain</InputLabel>
+                <Select
+                  labelId="domain-label"
+                  value={domain}
+                  label="Domain"
+                  onChange={(e) => setDomain(e.target.value)}
+                >
+                  <MenuItem value="">Not specified</MenuItem>
+                  <MenuItem value="agriculture">Agriculture</MenuItem>
+                  <MenuItem value="home">Home</MenuItem>
+                  <MenuItem value="industrial">Industrial</MenuItem>
+                  <MenuItem value="warehouse">Warehouse</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <FormControl fullWidth>
+                <InputLabel id="environment-type-label">Environment Type</InputLabel>
+                <Select
+                  labelId="environment-type-label"
+                  value={environmentType}
+                  label="Environment Type"
+                  onChange={(e) => setEnvironmentType(e.target.value)}
+                >
+                  <MenuItem value="">Not specified</MenuItem>
+                  <MenuItem value="farm">Farm</MenuItem>
+                  <MenuItem value="greenhouse">Greenhouse</MenuItem>
+                  <MenuItem value="home">Home</MenuItem>
+                  <MenuItem value="warehouse">Warehouse</MenuItem>
+                  <MenuItem value="industrial">Industrial</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <FormControl fullWidth>
+                <InputLabel id="indoor-outdoor-label">Exposure</InputLabel>
+                <Select
+                  labelId="indoor-outdoor-label"
+                  value={indoorOutdoor}
+                  label="Exposure"
+                  onChange={(e) => setIndoorOutdoor(e.target.value)}
+                >
+                  <MenuItem value="">Not specified</MenuItem>
+                  <MenuItem value="indoor">Indoor</MenuItem>
+                  <MenuItem value="outdoor">Outdoor</MenuItem>
+                  <MenuItem value="mixed">Mixed</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Asset / Object"
+                value={assetType}
+                onChange={(e) => setAssetType(e.target.value)}
+                placeholder="e.g., tomato crop, storage room, garbage bin"
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Observation / History Window (Days)"
+                type="number"
+                value={historicalWindowDays}
+                onChange={(e) => setHistoricalWindowDays(e.target.value)}
+                helperText="Used for AI review of recent readings and later improvement suggestions."
+              />
+            </Grid>
+
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                label="Country"
+                value={locationCountry}
+                onChange={(e) => setLocationCountry(e.target.value)}
+              />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                label="Region / City"
+                value={locationRegion}
+                onChange={(e) => setLocationRegion(e.target.value)}
+              />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                label="Location Label"
+                value={locationLabel}
+                onChange={(e) => setLocationLabel(e.target.value)}
+                placeholder="e.g., Jaffna greenhouse A"
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                multiline
+                rows={2}
+                label="Installation Notes"
+                value={installationNotes}
+                onChange={(e) => setInstallationNotes(e.target.value)}
+                placeholder="e.g., near south wall, partial shade in afternoon"
+              />
+            </Grid>
+          </Grid>
         </Box>
+
+        {setupMode === 'ai_assisted' && (
+          <Box sx={{ mt: 3 }}>
+            <Typography variant="subtitle1" gutterBottom>
+              AI Support
+            </Typography>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              Describe what this sensor is for, then let AI draft threshold and reporting values that
+              you can still fine-tune manually.
+            </Typography>
+            <TextField
+              fullWidth
+              multiline
+              rows={4}
+              value={purpose}
+              onChange={(e) => setPurpose(e.target.value)}
+              placeholder="e.g., Monitor garbage bin fill level and odor for a 120L outdoor bin using cm level readings"
+              sx={{ mt: 1 }}
+            />
+
+            <Button
+              variant="contained"
+              onClick={handleAISuggest}
+              disabled={aiLoading || !purpose.trim()}
+              sx={{ mt: 2 }}
+            >
+              {aiLoading ? 'Generating AI Draft...' : 'Generate AI Draft'}
+            </Button>
+
+            {aiDraftSummary && (
+              <Alert severity={aiDraftSummary.warnings.length > 0 ? 'warning' : 'success'} sx={{ mt: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                  AI draft ready
+                </Typography>
+                <Typography variant="body2">{aiDraftSummary.explanation}</Typography>
+                <Typography variant="body2" sx={{ mt: 1 }}>
+                  Confidence score: {aiDraftSummary.confidenceScore.toFixed(2)}
+                </Typography>
+                {aiDraftSummary.requiresUserConfirmation && (
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    Review the draft carefully before saving because the backend flagged that it
+                    still needs confirmation.
+                  </Typography>
+                )}
+                {aiDraftSummary.warnings.length > 0 && (
+                  <Box component="ul" sx={{ pl: 2, mb: 0, mt: 1 }}>
+                    {aiDraftSummary.warnings.map((warning) => (
+                      <li key={warning}>
+                        <Typography variant="body2">{warning}</Typography>
+                      </li>
+                    ))}
+                  </Box>
+                )}
+              </Alert>
+            )}
+          </Box>
+        )}
 
         <Box sx={{ mt: 4 }}>
           <Typography variant="subtitle1" gutterBottom>
@@ -390,6 +735,11 @@ const SensorConfig: React.FC = () => {
           />
         </Box>
 
+        <Alert severity="info" sx={{ mt: 3 }}>
+          Saving activates this configuration immediately. After live readings start coming in, the
+          system will keep observing in the background and can suggest better refinements later.
+        </Alert>
+
         <Button
           variant="contained"
           fullWidth
@@ -397,7 +747,7 @@ const SensorConfig: React.FC = () => {
           disabled={saving}
           sx={{ mt: 3 }}
         >
-          {saving ? 'Saving...' : 'Save Configuration'}
+          {saving ? 'Saving...' : 'Save and Activate Configuration'}
         </Button>
       </Paper>
     </Container>

@@ -12,6 +12,21 @@ export interface Sensor {
   status: 'OK' | 'OFFLINE' | 'ERROR';
   config_active?: boolean;
   last_seen?: string;
+  context?: SensorContext;
+  observation?: SensorObservation;
+  last_calibrated_at?: string;
+  calibration_due_at?: string;
+  calibration_status?: string;
+}
+
+export interface SensorObservation {
+  status: 'awaiting_data' | 'observing' | 'ready_for_review';
+  message: string;
+  window_days: number;
+  readings_collected: number;
+  minimum_readings: number;
+  started_at?: string;
+  last_reading_at?: string;
 }
 
 export interface SensorReading {
@@ -44,8 +59,28 @@ export interface SensorConfig {
   };
 }
 
+export interface LocationContext {
+  mode?: string;
+  label?: string;
+  country?: string;
+  region?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+export interface SensorContext {
+  domain?: string;
+  environment_type?: string;
+  indoor_outdoor?: string;
+  asset_type?: string;
+  installation_notes?: string;
+  historical_window_days?: number;
+  location?: LocationContext;
+}
+
 export interface AISuggestRequest {
   purpose: string;
+  context?: SensorContext;
   desired_battery_life_days?: number;
   sampling_preferences?: {
     frequency?: 'low' | 'medium' | 'high';
@@ -54,7 +89,31 @@ export interface AISuggestRequest {
 
 export interface AISuggestResponse {
   suggested_config: SensorConfig;
+  validated_config: SensorConfig;
   explanation: string;
+  validation_status: string;
+  warnings?: string[];
+  applied_rules?: string[];
+  confidence_score: number;
+  requires_user_confirmation: boolean;
+}
+
+export interface SaveSensorConfigRequest {
+  purpose: string;
+  context?: SensorContext;
+  config: SensorConfig;
+}
+
+export interface SaveSensorConfigResponse {
+  status: string;
+  validated_config: SensorConfig;
+  validation_status: string;
+  warnings?: string[];
+  applied_rules?: string[];
+  confidence_score: number;
+  requires_user_confirmation: boolean;
+  config_active: boolean;
+  observation?: SensorObservation;
 }
 
 export const getSensors = async (controllerId: string): Promise<Sensor[]> => {
@@ -80,9 +139,10 @@ export const getAISuggestedConfig = async (
 
 export const saveSensorConfig = async (
   sensorId: string,
-  config: SensorConfig
-): Promise<void> => {
-  await api.post(API_ENDPOINTS.SENSORS.CONFIG(sensorId), config);
+  request: SaveSensorConfigRequest
+): Promise<SaveSensorConfigResponse> => {
+  const response = await api.post<SaveSensorConfigResponse>(API_ENDPOINTS.SENSORS.CONFIG(sensorId), request);
+  return response.data;
 };
 
 export const getSensorReadings = async (

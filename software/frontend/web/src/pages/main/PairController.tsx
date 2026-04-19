@@ -181,8 +181,9 @@ const PairController: React.FC = () => {
           Scan Controller QR
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Scan the QR code on the controller and enter the ID below. This will assign the controller
-          to your account.
+          Scan the QR code on the controller and enter the pairing token below. The backend now
+          supports one-time pairing tokens and still accepts the legacy controller ID for older
+          devices.
         </Typography>
 
         {error && (
@@ -231,10 +232,10 @@ const PairController: React.FC = () => {
 
             <TextField
               fullWidth
-              label="Controller QR ID"
+              label="Pairing Token or Controller ID"
               value={qrToken}
               onChange={(e) => setQrToken(e.target.value)}
-              placeholder="e.g., CTRL-8F2A19"
+              placeholder="e.g., PAIR-7X4P2L or CTRL-8F2A19"
               disabled={loading}
               required
             />
