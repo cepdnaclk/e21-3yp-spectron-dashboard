@@ -109,6 +109,7 @@ const SensorConfig: React.FC = () => {
   const initializedSensorIdRef = useRef<string | null>(null);
 
   const sensorMetrics = useMemo(() => getSensorMetrics(sensor?.type || ''), [sensor?.type]);
+  const isAiAssisted = setupMode === 'ai_assisted';
   const estimatedBatteryLifeDays = estimateBatteryLifeDays(
     parseInt(reportsPerDay, 10) || 1,
     sensorMetrics.length,
@@ -303,7 +304,7 @@ const SensorConfig: React.FC = () => {
 
       const response = await saveSensorConfig(id, {
         purpose: purpose.trim(),
-        context: buildContextPayload(),
+        context: isAiAssisted ? buildContextPayload() : undefined,
         config,
       });
 
@@ -417,132 +418,134 @@ const SensorConfig: React.FC = () => {
           </Stack>
           <Alert severity={setupMode === 'manual' ? 'info' : 'success'} sx={{ mt: 2 }}>
             {setupMode === 'manual'
-              ? 'Enter threshold values directly and save whenever you are ready. The sensor becomes configured immediately.'
+              ? 'Enter threshold values directly and save whenever you are ready. Context fields are skipped unless you turn on AI support.'
               : 'Use AI support to prefill values from your purpose and context, then review and edit anything before saving.'}
           </Alert>
         </Box>
 
-        <Box sx={{ mt: 3 }}>
-          <Typography variant="subtitle1" gutterBottom>
-            Context
-          </Typography>
-          <Typography variant="body2" color="text.secondary" gutterBottom>
-            Optional but recommended. These details help with AI suggestions now and with better
-            improvement recommendations after live data starts coming in.
-          </Typography>
+        {isAiAssisted && (
+          <Box sx={{ mt: 3 }}>
+            <Typography variant="subtitle1" gutterBottom>
+              Context
+            </Typography>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              Optional but recommended. These details help with AI suggestions now and with better
+              improvement recommendations after live data starts coming in.
+            </Typography>
 
-          <Grid container spacing={2} sx={{ mt: 0.5 }}>
-            <Grid item xs={12} md={4}>
-              <FormControl fullWidth>
-                <InputLabel id="domain-label">Domain</InputLabel>
-                <Select
-                  labelId="domain-label"
-                  value={domain}
-                  label="Domain"
-                  onChange={(e) => setDomain(e.target.value)}
-                >
-                  <MenuItem value="">Not specified</MenuItem>
-                  <MenuItem value="agriculture">Agriculture</MenuItem>
-                  <MenuItem value="home">Home</MenuItem>
-                  <MenuItem value="industrial">Industrial</MenuItem>
-                  <MenuItem value="warehouse">Warehouse</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <FormControl fullWidth>
-                <InputLabel id="environment-type-label">Environment Type</InputLabel>
-                <Select
-                  labelId="environment-type-label"
-                  value={environmentType}
-                  label="Environment Type"
-                  onChange={(e) => setEnvironmentType(e.target.value)}
-                >
-                  <MenuItem value="">Not specified</MenuItem>
-                  <MenuItem value="farm">Farm</MenuItem>
-                  <MenuItem value="greenhouse">Greenhouse</MenuItem>
-                  <MenuItem value="home">Home</MenuItem>
-                  <MenuItem value="warehouse">Warehouse</MenuItem>
-                  <MenuItem value="industrial">Industrial</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <FormControl fullWidth>
-                <InputLabel id="indoor-outdoor-label">Exposure</InputLabel>
-                <Select
-                  labelId="indoor-outdoor-label"
-                  value={indoorOutdoor}
-                  label="Exposure"
-                  onChange={(e) => setIndoorOutdoor(e.target.value)}
-                >
-                  <MenuItem value="">Not specified</MenuItem>
-                  <MenuItem value="indoor">Indoor</MenuItem>
-                  <MenuItem value="outdoor">Outdoor</MenuItem>
-                  <MenuItem value="mixed">Mixed</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
+            <Grid container spacing={2} sx={{ mt: 0.5 }}>
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth>
+                  <InputLabel id="domain-label">Domain</InputLabel>
+                  <Select
+                    labelId="domain-label"
+                    value={domain}
+                    label="Domain"
+                    onChange={(e) => setDomain(e.target.value)}
+                  >
+                    <MenuItem value="">Not specified</MenuItem>
+                    <MenuItem value="agriculture">Agriculture</MenuItem>
+                    <MenuItem value="home">Home</MenuItem>
+                    <MenuItem value="industrial">Industrial</MenuItem>
+                    <MenuItem value="warehouse">Warehouse</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth>
+                  <InputLabel id="environment-type-label">Environment Type</InputLabel>
+                  <Select
+                    labelId="environment-type-label"
+                    value={environmentType}
+                    label="Environment Type"
+                    onChange={(e) => setEnvironmentType(e.target.value)}
+                  >
+                    <MenuItem value="">Not specified</MenuItem>
+                    <MenuItem value="farm">Farm</MenuItem>
+                    <MenuItem value="greenhouse">Greenhouse</MenuItem>
+                    <MenuItem value="home">Home</MenuItem>
+                    <MenuItem value="warehouse">Warehouse</MenuItem>
+                    <MenuItem value="industrial">Industrial</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth>
+                  <InputLabel id="indoor-outdoor-label">Exposure</InputLabel>
+                  <Select
+                    labelId="indoor-outdoor-label"
+                    value={indoorOutdoor}
+                    label="Exposure"
+                    onChange={(e) => setIndoorOutdoor(e.target.value)}
+                  >
+                    <MenuItem value="">Not specified</MenuItem>
+                    <MenuItem value="indoor">Indoor</MenuItem>
+                    <MenuItem value="outdoor">Outdoor</MenuItem>
+                    <MenuItem value="mixed">Mixed</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
 
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Asset / Object"
-                value={assetType}
-                onChange={(e) => setAssetType(e.target.value)}
-                placeholder="e.g., tomato crop, storage room, garbage bin"
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Observation / History Window (Days)"
-                type="number"
-                value={historicalWindowDays}
-                onChange={(e) => setHistoricalWindowDays(e.target.value)}
-                helperText="Used for AI review of recent readings and later improvement suggestions."
-              />
-            </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Asset / Object"
+                  value={assetType}
+                  onChange={(e) => setAssetType(e.target.value)}
+                  placeholder="e.g., tomato crop, storage room, garbage bin"
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Observation / History Window (Days)"
+                  type="number"
+                  value={historicalWindowDays}
+                  onChange={(e) => setHistoricalWindowDays(e.target.value)}
+                  helperText="Used for AI review of recent readings and later improvement suggestions."
+                />
+              </Grid>
 
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                label="Country"
-                value={locationCountry}
-                onChange={(e) => setLocationCountry(e.target.value)}
-              />
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                label="Region / City"
-                value={locationRegion}
-                onChange={(e) => setLocationRegion(e.target.value)}
-              />
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                label="Location Label"
-                value={locationLabel}
-                onChange={(e) => setLocationLabel(e.target.value)}
-                placeholder="e.g., Jaffna greenhouse A"
-              />
-            </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField
+                  fullWidth
+                  label="Country"
+                  value={locationCountry}
+                  onChange={(e) => setLocationCountry(e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField
+                  fullWidth
+                  label="Region / City"
+                  value={locationRegion}
+                  onChange={(e) => setLocationRegion(e.target.value)}
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField
+                  fullWidth
+                  label="Location Label"
+                  value={locationLabel}
+                  onChange={(e) => setLocationLabel(e.target.value)}
+                  placeholder="e.g., Jaffna greenhouse A"
+                />
+              </Grid>
 
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                multiline
-                rows={2}
-                label="Installation Notes"
-                value={installationNotes}
-                onChange={(e) => setInstallationNotes(e.target.value)}
-                placeholder="e.g., near south wall, partial shade in afternoon"
-              />
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={2}
+                  label="Installation Notes"
+                  value={installationNotes}
+                  onChange={(e) => setInstallationNotes(e.target.value)}
+                  placeholder="e.g., near south wall, partial shade in afternoon"
+                />
+              </Grid>
             </Grid>
-          </Grid>
-        </Box>
+          </Box>
+        )}
 
         {setupMode === 'ai_assisted' && (
           <Box sx={{ mt: 3 }}>

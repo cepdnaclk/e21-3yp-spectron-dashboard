@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spectron Pipeline Demo</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="hero panel">
+      <div class="hero-copy">
+        <p class="eyebrow">Standalone Demo Site</p>
+        <h1>Spectron Live Pipeline Tracker</h1>
+        <p class="hero-text">
+          This site watches the ingest server separately from the main application and
+          visualizes each new packet as it moves through the live demo pipeline.
+        </p>
+      </div>
+
+      <div class="hero-actions">
+        <label class="field">
+          <span>Ingest Source</span>
+          <input id="sourceUrlInput" type="text" placeholder="http://localhost:8080">
+        </label>
+        <div class="action-row">
+          <button id="saveSourceButton" class="button button-primary" type="button">Connect Source</button>
+          <button id="replayButton" class="button" type="button">Replay Latest Packet</button>
+          <button id="clearButton" class="button button-ghost" type="button">Clear History</button>
+        </div>
+        <p id="sourceHint" class="hint"></p>
+      </div>
+    </header>
+
+    <section class="stats-grid">
+      <article class="panel stat-card">
+        <p class="stat-label">Connection</p>
+        <p id="connectionValue" class="stat-value">Checking...</p>
+        <p id="connectionMeta" class="stat-meta">Waiting for first poll.</p>
+      </article>
+      <article class="panel stat-card">
+        <p class="stat-label">Packets Tracked</p>
+        <p id="trackedValue" class="stat-value">0</p>
+        <p class="stat-meta">New packets animated in this session.</p>
+      </article>
+      <article class="panel stat-card">
+        <p class="stat-label">Active Stage</p>
+        <p id="stageValue" class="stat-value">Idle</p>
+        <p id="stageMeta" class="stat-meta">No live packet is moving right now.</p>
+      </article>
+      <article class="panel stat-card">
+        <p class="stat-label">Latest Device</p>
+        <p id="deviceValue" class="stat-value">Waiting</p>
+        <p id="deviceMeta" class="stat-meta">No packet observed yet.</p>
+      </article>
+    </section>
+
+    <main class="content-grid">
+      <section class="panel pipeline-panel">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Live Demo Pipeline</p>
+            <h2>Realtime packet flow</h2>
+          </div>
+          <div class="chip-group">
+            <span class="chip chip-live">Live steps</span>
+            <span class="chip">Animated on arrival</span>
+          </div>
+        </div>
+
+        <div class="track-shell">
+          <div class="track-line"></div>
+          <div id="trackToken" class="track-token hidden">
+            <span>PKT</span>
+          </div>
+        </div>
+
+        <div id="liveStages" class="stage-grid"></div>
+
+        <div class="section-head future-head">
+          <div>
+            <p class="eyebrow">Next Integration</p>
+            <h3>Future stages</h3>
+          </div>
+          <span class="chip chip-future">Not live yet</span>
+        </div>
+        <div id="futureStages" class="future-grid"></div>
+      </section>
+
+      <aside class="side-column">
+        <section class="panel inspector-panel">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Latest Packet</p>
+              <h2>Packet inspector</h2>
+            </div>
+          </div>
+          <div id="packetSummary" class="summary-list"></div>
+          <pre id="packetPreview" class="preview-block">No packet captured yet.</pre>
+        </section>
+
+        <section class="panel log-panel">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Trace History</p>
+              <h2>Recent packet runs</h2>
+            </div>
+          </div>
+          <div id="traceList" class="trace-list"></div>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
