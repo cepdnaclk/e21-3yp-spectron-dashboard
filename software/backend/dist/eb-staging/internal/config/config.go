@@ -15,6 +15,13 @@ type Config struct {
 	DatabaseURL    string
 	JWTSecret      string
 	AllowedOrigins []string
+	Kafka          KafkaConfig
+}
+
+type KafkaConfig struct {
+	Brokers          []string
+	RawReadingsTopic string
+	ConsumerGroup    string
 }
 
 func Load() (*Config, error) {
@@ -28,6 +35,9 @@ func Load() (*Config, error) {
 	dbURL := os.Getenv("DATABASE_URL")
 	jwtSecret := getenv("JWT_SECRET", DefaultDevJWTSecret)
 	allowedOrigins := parseAllowedOrigins(os.Getenv("ALLOWED_ORIGINS"))
+	kafkaBrokers := parseCSV(os.Getenv("KAFKA_BROKERS"))
+	kafkaTopic := getenv("KAFKA_RAW_READINGS_TOPIC", "spectron.raw-readings")
+	kafkaConsumerGroup := getenv("KAFKA_CONSUMER_GROUP", "spectron-readings-consumer")
 
 	if dbURL == "" {
 		// For local development and cloud deployments you can set individual parts instead.
@@ -39,6 +49,11 @@ func Load() (*Config, error) {
 		DatabaseURL:    dbURL,
 		JWTSecret:      jwtSecret,
 		AllowedOrigins: allowedOrigins,
+		Kafka: KafkaConfig{
+			Brokers:          kafkaBrokers,
+			RawReadingsTopic: kafkaTopic,
+			ConsumerGroup:    kafkaConsumerGroup,
+		},
 	}, nil
 }
 
@@ -101,4 +116,26 @@ func parseAllowedOrigins(raw string) []string {
 	}
 
 	return origins
+}
+
+func parseCSV(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+
+	parts := strings.Split(raw, ",")
+	values := make([]string, 0, len(parts))
+	for _, part := range parts {
+		value := strings.TrimSpace(part)
+		if value == "" {
+			continue
+		}
+		values = append(values, value)
+	}
+
+	if len(values) == 0 {
+		return nil
+	}
+
+	return values
 }

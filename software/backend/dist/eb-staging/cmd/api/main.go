@@ -15,6 +15,7 @@ import (
 	"spectron-backend/internal/config"
 	"spectron-backend/internal/db"
 	"spectron-backend/internal/httpapi"
+	"spectron-backend/internal/iot"
 )
 
 func main() {
@@ -38,8 +39,16 @@ func main() {
 
 	auth.SetJWTSecret(cfg.JWTSecret)
 
+	rawReadingsPublisher := iot.NewKafkaPublisher(cfg.Kafka.Brokers, cfg.Kafka.RawReadingsTopic)
+	defer rawReadingsPublisher.Close()
+	if len(cfg.Kafka.Brokers) == 0 {
+		log.Println("WARNING: Kafka is not configured. POST /api/iot/upload will return 503 until KAFKA_BROKERS is set.")
+	} else {
+		log.Printf("Kafka raw readings topic %q via brokers %v", cfg.Kafka.RawReadingsTopic, cfg.Kafka.Brokers)
+	}
+
 	r := chi.NewRouter()
-	httpapi.RegisterRoutes(r, pool, cfg.AllowedOrigins)
+	httpapi.RegisterRoutes(r, pool, cfg.AllowedOrigins, rawReadingsPublisher)
 
 	srv := &http.Server{
 		Addr:         "0.0.0.0:" + cfg.HTTPPort, // Listen on all interfaces for mobile access

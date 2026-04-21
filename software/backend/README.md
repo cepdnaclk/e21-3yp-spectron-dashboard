@@ -51,8 +51,13 @@ curl http://localhost:8081/healthz
 
 ```powershell
 go mod download
-go mod tidy
 go run cmd\api\main.go
+```
+
+To run the Kafka-backed readings consumer:
+
+```powershell
+go run cmd\readings-consumer\main.go
 ```
 
 ## Environment Variables
@@ -67,6 +72,42 @@ Optional:
 
 ```powershell
 $env:HTTP_PORT="8080"
+$env:KAFKA_BROKERS="172.31.13.87:9092"
+$env:KAFKA_RAW_READINGS_TOPIC="spectron.raw-readings"
+$env:KAFKA_CONSUMER_GROUP="spectron-readings-consumer"
+```
+
+`POST /api/iot/upload` now accepts controller payloads in this shape and publishes them to Kafka:
+
+```json
+{
+  "deviceId": "CTRL01",
+  "ts": 1700000000,
+  "sensors": [
+    { "id": "T01", "type": "temp", "v": 31.4 },
+    { "id": "M01", "type": "motion", "v": 1 }
+  ]
+}
+```
+
+The consumer reads `spectron.raw-readings`, upserts sensors for the controller, writes `sensor_readings`, and marks the controller/sensors as online.
+
+## Typical Kafka Demo Run
+
+In one terminal:
+
+```powershell
+$env:DATABASE_URL="postgres://spectron:spectron@localhost:5432/spectron?sslmode=disable"
+$env:KAFKA_BROKERS="172.31.13.87:9092"
+go run cmd\readings-consumer\main.go
+```
+
+In another terminal:
+
+```powershell
+$env:DATABASE_URL="postgres://spectron:spectron@localhost:5432/spectron?sslmode=disable"
+$env:KAFKA_BROKERS="172.31.13.87:9092"
+go run cmd\api\main.go
 ```
 
 ## Helpful Scripts in This Folder
