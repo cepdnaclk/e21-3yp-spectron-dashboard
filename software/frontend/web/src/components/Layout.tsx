@@ -28,6 +28,15 @@ const routes = [
   { label: 'Profile', path: '/profile', icon: <AccountCircle /> },
 ];
 
+const getInitials = (name?: string) => {
+  const source = (name || 'Spectron User').trim();
+  const parts = source.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  }
+  return source.slice(0, 2).toUpperCase();
+};
+
 const Layout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -35,6 +44,8 @@ const Layout: React.FC = () => {
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
   const [value, setValue] = React.useState(0);
+  const displayName = user?.name || 'Spectron User';
+  const userInitials = getInitials(user?.name);
 
   React.useEffect(() => {
     const path = location.pathname;
@@ -128,11 +139,20 @@ const Layout: React.FC = () => {
                 Signed in as
               </Typography>
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
-                <Avatar sx={{ width: 34, height: 34, bgcolor: 'primary.main' }}>
-                  {user?.email?.charAt(0).toUpperCase()}
+                <Avatar
+                  src={user?.avatar_url || undefined}
+                  sx={{
+                    width: 34,
+                    height: 34,
+                    bgcolor: 'primary.main',
+                    fontSize: 13,
+                    fontWeight: 800,
+                  }}
+                >
+                  {userInitials}
                 </Avatar>
                 <Typography variant="body2" noWrap fontWeight={800}>
-                  {user?.email || 'Spectron user'}
+                  {displayName}
                 </Typography>
               </Stack>
             </Box>

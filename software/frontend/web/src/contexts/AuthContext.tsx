@@ -13,11 +13,13 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const mapAuthUserToUser = (authUser: { id: string; email: string; phone?: string }): User => {
+const mapAuthUserToUser = (authUser: { id: string; email: string; name?: string; phone?: string; avatar_url?: string }): User => {
   return {
     id: authUser.id,
     email: authUser.email,
+    name: authUser.name,
     phone: authUser.phone,
+    avatar_url: authUser.avatar_url,
     accounts: [],
   };
 };

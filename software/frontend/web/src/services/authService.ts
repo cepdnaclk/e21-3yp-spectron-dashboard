@@ -18,24 +18,23 @@ export interface AuthResponse {
   user: {
     id: string;
     email: string;
+    name?: string;
     phone?: string;
+    avatar_url?: string;
   };
 }
 
 export interface User {
   id: string;
   email: string;
+  name?: string;
   phone?: string;
+  avatar_url?: string;
   accounts: Array<{
     id: string;
     name: string;
     role: 'OWNER' | 'ADMIN' | 'VIEWER';
   }>;
-}
-
-interface TokenPayload {
-  user_id?: string;
-  email?: string;
 }
 
 type MeResponse =
@@ -44,7 +43,9 @@ type MeResponse =
       user: {
         id: string;
         email: string;
+        name?: string;
         phone?: string;
+        avatar_url?: string;
       };
       accounts?: Array<{
         id: string;
@@ -58,7 +59,9 @@ const normalizeUser = (data: MeResponse): User => {
     return {
       id: data.user.id,
       email: data.user.email,
+      name: data.user.name,
       phone: data.user.phone,
+      avatar_url: data.user.avatar_url,
       accounts: (data.accounts || []).map((account) => ({
         ...account,
         role: account.role || 'VIEWER',
@@ -88,33 +91,34 @@ export const register = async (data: RegisterRequest): Promise<AuthResponse> => 
 };
 
 export const getCurrentUser = async (): Promise<User> => {
-  const token = getToken();
-
-  if (!token) {
+  if (!getToken()) {
     throw new Error('No authentication token');
   }
 
-  const parts = token.split('.');
-  if (parts.length < 2) {
-    throw new Error('Invalid authentication token');
-  }
-
-  const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-  const normalizedPayload = payloadBase64.padEnd(Math.ceil(payloadBase64.length / 4) * 4, '=');
-
-  const payload = JSON.parse(atob(normalizedPayload)) as TokenPayload;
-
-  if (!payload.user_id || !payload.email) {
-    throw new Error('Invalid authentication token payload');
-  }
-
-  return {
-    id: payload.user_id,
-    email: payload.email,
-    accounts: [],
-  };
+  const response = await api.get<MeResponse>(API_ENDPOINTS.AUTH.ME);
+  return normalizeUser(response.data);
 };
 
 export const logout = async (): Promise<void> => {
   removeToken();
+};
+
+export interface UpdateProfileRequest {
+  name?: string;
+  phone?: string;
+  avatar_url?: string;
+}
+
+export interface ChangePasswordRequest {
+  current_password: string;
+  new_password: string;
+}
+
+export const updateProfile = async (data: UpdateProfileRequest): Promise<User> => {
+  const response = await api.patch<User>(API_ENDPOINTS.AUTH.ME, data);
+  return normalizeUser(response.data);
+};
+
+export const changePassword = async (data: ChangePasswordRequest): Promise<void> => {
+  await api.post(API_ENDPOINTS.AUTH.CHANGE_PASSWORD, data);
 };
