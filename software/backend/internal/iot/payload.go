@@ -37,6 +37,15 @@ type RawReadingsMessage struct {
 }
 
 func BuildRawReadingsEvent(req UploadRequest, receivedAt time.Time) RawReadingsEvent {
+	return BuildRawReadingsEventWithSource(req, receivedAt, "controller-upload")
+}
+
+func BuildRawReadingsEventWithSource(req UploadRequest, receivedAt time.Time, source string) RawReadingsEvent {
+	trimmedSource := strings.TrimSpace(source)
+	if trimmedSource == "" {
+		trimmedSource = "controller-upload"
+	}
+
 	readingTime := ResolveReadingTime(req.TS, receivedAt)
 	sensors := make([]RawReadingsMessage, 0, len(req.Sensors))
 	for _, sensor := range req.Sensors {
@@ -53,7 +62,7 @@ func BuildRawReadingsEvent(req UploadRequest, receivedAt time.Time) RawReadingsE
 		TimestampRaw: req.TS,
 		ReadingTime:  readingTime,
 		ReceivedAt:   receivedAt.UTC(),
-		Source:       "controller-upload",
+		Source:       trimmedSource,
 		Sensors:      sensors,
 	}
 }

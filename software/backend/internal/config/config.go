@@ -3,6 +3,7 @@ package config
 import (
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -16,12 +17,27 @@ type Config struct {
 	JWTSecret      string
 	AllowedOrigins []string
 	Kafka          KafkaConfig
+	MQTT           MQTTConfig
 }
 
 type KafkaConfig struct {
 	Brokers          []string
 	RawReadingsTopic string
 	ConsumerGroup    string
+}
+
+type MQTTConfig struct {
+	Enabled            bool
+	BrokerURL          string
+	Topic              string
+	ClientID           string
+	Username           string
+	Password           string
+	QoS                byte
+	CAFile             string
+	ClientCertFile     string
+	ClientKeyFile      string
+	InsecureSkipVerify bool
 }
 
 func Load() (*Config, error) {
@@ -38,6 +54,10 @@ func Load() (*Config, error) {
 	kafkaBrokers := parseCSV(os.Getenv("KAFKA_BROKERS"))
 	kafkaTopic := getenv("KAFKA_RAW_READINGS_TOPIC", "spectron.raw-readings")
 	kafkaConsumerGroup := getenv("KAFKA_CONSUMER_GROUP", "spectron-readings-consumer")
+	mqttQoS, err := parseQoS(getenv("MQTT_QOS", "1"))
+	if err != nil {
+		return nil, err
+	}
 
 	if dbURL == "" {
 		// For local development and cloud deployments you can set individual parts instead.
@@ -53,6 +73,19 @@ func Load() (*Config, error) {
 			Brokers:          kafkaBrokers,
 			RawReadingsTopic: kafkaTopic,
 			ConsumerGroup:    kafkaConsumerGroup,
+		},
+		MQTT: MQTTConfig{
+			Enabled:            parseBool(getenv("MQTT_BRIDGE_ENABLED", "false")),
+			BrokerURL:          getenv("MQTT_BROKER_URL", ""),
+			Topic:              getenv("MQTT_TOPIC", "spectron/controllers/+/raw"),
+			ClientID:           getenv("MQTT_CLIENT_ID", "spectron-mqtt-bridge"),
+			Username:           getenv("MQTT_USERNAME", ""),
+			Password:           os.Getenv("MQTT_PASSWORD"),
+			QoS:                mqttQoS,
+			CAFile:             getenv("MQTT_CA_FILE", ""),
+			ClientCertFile:     getenv("MQTT_CLIENT_CERT_FILE", ""),
+			ClientKeyFile:      getenv("MQTT_CLIENT_KEY_FILE", ""),
+			InsecureSkipVerify: parseBool(getenv("MQTT_INSECURE_SKIP_VERIFY", "false")),
 		},
 	}, nil
 }
@@ -138,4 +171,26 @@ func parseCSV(raw string) []string {
 	}
 
 	return values
+}
+
+func parseBool(raw string) bool {
+	value, err := strconv.ParseBool(strings.TrimSpace(raw))
+	return err == nil && value
+}
+
+func parseQoS(raw string) (byte, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return 1, nil
+	}
+
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, err
+	}
+	if parsed < 0 || parsed > 2 {
+		return 0, strconv.ErrRange
+	}
+
+	return byte(parsed), nil
 }
