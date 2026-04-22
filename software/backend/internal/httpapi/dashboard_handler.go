@@ -2,7 +2,11 @@ package httpapi
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -145,15 +149,19 @@ func (h *DashboardHandler) GetReadings(w http.ResponseWriter, r *http.Request) {
 	// Build query based on interval
 	var query string
 	if interval != "" {
-		// Use time_bucket for aggregation (TimescaleDB)
+		bucketSize, err := parseBucketInterval(interval)
+		if err != nil {
+			http.Error(w, "invalid interval", http.StatusBadRequest)
+			return
+		}
+
 		query = `
-			SELECT time_bucket($1::interval, time) as bucket, AVG(value) as avg_value, MIN(value) as min_value, MAX(value) as max_value
+			SELECT time, value
 			FROM sensor_readings
-			WHERE sensor_id = $2 AND time >= $3 AND time <= $4
-			GROUP BY bucket
-			ORDER BY bucket
+			WHERE sensor_id = $1 AND time >= $2 AND time <= $3
+			ORDER BY time
 		`
-		rows, err := h.db.Query(r.Context(), query, interval, sensorID, from, to)
+		rows, err := h.db.Query(r.Context(), query, sensorID, from, to)
 		if err != nil {
 			http.Error(w, "database error", http.StatusInternalServerError)
 			return
@@ -167,11 +175,64 @@ func (h *DashboardHandler) GetReadings(w http.ResponseWriter, r *http.Request) {
 			MaxValue float64   `json:"max_value"`
 		}
 
-		var readings []Reading
+		type aggregate struct {
+			sum   float64
+			count int
+			min   float64
+			max   float64
+		}
+
+		buckets := make(map[time.Time]*aggregate)
 		for rows.Next() {
-			var r Reading
-			rows.Scan(&r.Time, &r.AvgValue, &r.MinValue, &r.MaxValue)
-			readings = append(readings, r)
+			var readingTime time.Time
+			var value float64
+			if err := rows.Scan(&readingTime, &value); err != nil {
+				http.Error(w, "database error", http.StatusInternalServerError)
+				return
+			}
+
+			bucket := floorBucket(readingTime, bucketSize)
+			current, ok := buckets[bucket]
+			if !ok {
+				buckets[bucket] = &aggregate{
+					sum:   value,
+					count: 1,
+					min:   value,
+					max:   value,
+				}
+				continue
+			}
+
+			current.sum += value
+			current.count++
+			if value < current.min {
+				current.min = value
+			}
+			if value > current.max {
+				current.max = value
+			}
+		}
+
+		if err := rows.Err(); err != nil {
+			http.Error(w, "database error", http.StatusInternalServerError)
+			return
+		}
+
+		keys := make([]time.Time, 0, len(buckets))
+		for bucket := range buckets {
+			keys = append(keys, bucket)
+		}
+		sort.Slice(keys, func(i, j int) bool { return keys[i].Before(keys[j]) })
+
+		readings := make([]Reading, 0, len(keys))
+		for _, bucket := range keys {
+			current := buckets[bucket]
+			readings = append(readings, Reading{
+				Time:     bucket,
+				AvgValue: current.sum / float64(current.count),
+				MinValue: current.min,
+				MaxValue: current.max,
+			})
 		}
 
 		json.NewEncoder(w).Encode(readings)
@@ -192,9 +253,9 @@ func (h *DashboardHandler) GetReadings(w http.ResponseWriter, r *http.Request) {
 		defer rows.Close()
 
 		type Reading struct {
-			Time  time.Time              `json:"time"`
-			Value float64                 `json:"value"`
-			Meta  map[string]interface{}  `json:"meta,omitempty"`
+			Time  time.Time             `json:"time"`
+			Value float64               `json:"value"`
+			Meta  map[string]interface{} `json:"meta,omitempty"`
 		}
 
 		var readings []Reading
@@ -210,4 +271,61 @@ func (h *DashboardHandler) GetReadings(w http.ResponseWriter, r *http.Request) {
 
 		json.NewEncoder(w).Encode(readings)
 	}
+}
+
+func parseBucketInterval(value string) (time.Duration, error) {
+	trimmed := strings.TrimSpace(strings.ToLower(value))
+	if trimmed == "" {
+		return 0, fmt.Errorf("interval is required")
+	}
+
+	if duration, err := time.ParseDuration(trimmed); err == nil {
+		if duration <= 0 {
+			return 0, fmt.Errorf("interval must be positive")
+		}
+		return duration, nil
+	}
+
+	if strings.HasSuffix(trimmed, "d") {
+		count, err := strconv.Atoi(strings.TrimSuffix(trimmed, "d"))
+		if err != nil || count <= 0 {
+			return 0, fmt.Errorf("invalid day interval")
+		}
+		return time.Duration(count) * 24 * time.Hour, nil
+	}
+
+	parts := strings.Fields(trimmed)
+	if len(parts) != 2 {
+		return 0, fmt.Errorf("unsupported interval format")
+	}
+
+	count, err := strconv.Atoi(parts[0])
+	if err != nil || count <= 0 {
+		return 0, fmt.Errorf("invalid interval count")
+	}
+
+	switch strings.TrimSuffix(parts[1], "s") {
+	case "minute":
+		return time.Duration(count) * time.Minute, nil
+	case "hour":
+		return time.Duration(count) * time.Hour, nil
+	case "day":
+		return time.Duration(count) * 24 * time.Hour, nil
+	default:
+		return 0, fmt.Errorf("unsupported interval unit")
+	}
+}
+
+func floorBucket(t time.Time, interval time.Duration) time.Time {
+	if interval <= 0 {
+		return t.UTC()
+	}
+
+	seconds := int64(interval / time.Second)
+	if seconds <= 0 {
+		return t.UTC()
+	}
+
+	utc := t.UTC()
+	return time.Unix((utc.Unix()/seconds)*seconds, 0).UTC()
 }

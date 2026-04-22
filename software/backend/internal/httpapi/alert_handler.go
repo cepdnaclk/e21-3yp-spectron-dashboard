@@ -84,7 +84,7 @@ func (h *AlertHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	var alerts []models.Alert
+	alerts := make([]models.Alert, 0)
 	for rows.Next() {
 		var a models.Alert
 		err := rows.Scan(&a.ID, &a.AccountID, &a.ControllerID, &a.SensorID, &a.Type, &a.Severity, &a.Message, &a.CreatedAt, &a.AcknowledgedAt)

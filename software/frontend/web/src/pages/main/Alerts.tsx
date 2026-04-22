@@ -22,7 +22,7 @@ const Alerts: React.FC = () => {
 
   const loadAlerts = async () => {
     try {
-      const data = await getAlerts();
+      const data = (await getAlerts()) ?? [];
       data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setAlerts(data);
     } catch (error) {
