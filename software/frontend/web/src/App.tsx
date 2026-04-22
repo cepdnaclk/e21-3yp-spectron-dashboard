@@ -124,6 +124,38 @@ const theme = createTheme({
     MuiTextField: {
       defaultProps: {
         variant: 'outlined',
+        InputLabelProps: {
+          shrink: true,
+        },
+      },
+    },
+    MuiInputLabel: {
+      styleOverrides: {
+        root: {
+          position: 'relative',
+          transform: 'none',
+          marginBottom: 6,
+          color: '#6a624f',
+          fontWeight: 750,
+          '&.Mui-focused': {
+            color: '#6c8930',
+          },
+        },
+        shrink: {
+          transform: 'none',
+        },
+        asterisk: {
+          color: '#eb4f12',
+        },
+      },
+    },
+    MuiFormControl: {
+      styleOverrides: {
+        root: {
+          '& .MuiInputLabel-root + .MuiInputBase-root': {
+            marginTop: 0,
+          },
+        },
       },
     },
     MuiOutlinedInput: {
@@ -131,6 +163,30 @@ const theme = createTheme({
         root: {
           borderRadius: 8,
           backgroundColor: '#fffdf8',
+        },
+        input: {
+          padding: '18px 20px',
+          '&:-webkit-autofill': {
+            WebkitBoxShadow: '0 0 0 100px #fffdf8 inset',
+            WebkitTextFillColor: '#262411',
+            caretColor: '#262411',
+            borderRadius: 8,
+            transition: 'background-color 9999s ease-out 0s',
+          },
+          '&:-webkit-autofill:hover': {
+            WebkitBoxShadow: '0 0 0 100px #fffdf8 inset',
+            WebkitTextFillColor: '#262411',
+          },
+          '&:-webkit-autofill:focus': {
+            WebkitBoxShadow: '0 0 0 100px #fffdf8 inset',
+            WebkitTextFillColor: '#262411',
+          },
+        },
+        notchedOutline: {
+          top: 0,
+          legend: {
+            display: 'none',
+          },
         },
       },
     },

@@ -9,8 +9,10 @@ import {
   Box,
   Alert,
   Stack,
+  IconButton,
+  InputAdornment,
 } from '@mui/material';
-import { PersonAddAlt, Spa } from '@mui/icons-material';
+import { PersonAddAlt, Spa, Visibility, VisibilityOff } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 
 const SignUp: React.FC = () => {
@@ -19,6 +21,8 @@ const SignUp: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
@@ -105,6 +109,7 @@ const SignUp: React.FC = () => {
             <TextField
               fullWidth
               label="Name (Optional)"
+              placeholder="Your full name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               margin="normal"
@@ -114,6 +119,7 @@ const SignUp: React.FC = () => {
               fullWidth
               label="Email"
               type="email"
+              placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               margin="normal"
@@ -124,6 +130,7 @@ const SignUp: React.FC = () => {
               fullWidth
               label="Phone (Optional)"
               type="tel"
+              placeholder="+94 77 123 4567"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               margin="normal"
@@ -132,22 +139,52 @@ const SignUp: React.FC = () => {
             <TextField
               fullWidth
               label="Password"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
+              placeholder="Create a password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               margin="normal"
               required
               disabled={loading}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      onClick={() => setShowPassword((current) => !current)}
+                      onMouseDown={(event) => event.preventDefault()}
+                      edge="end"
+                    >
+                      {showPassword ? <Visibility /> : <VisibilityOff />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
             />
             <TextField
               fullWidth
               label="Confirm Password"
-              type="password"
+              type={showConfirmPassword ? 'text' : 'password'}
+              placeholder="Re-enter your password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               margin="normal"
               required
               disabled={loading}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                      onClick={() => setShowConfirmPassword((current) => !current)}
+                      onMouseDown={(event) => event.preventDefault()}
+                      edge="end"
+                    >
+                      {showConfirmPassword ? <Visibility /> : <VisibilityOff />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
             />
             <Button
               type="submit"
