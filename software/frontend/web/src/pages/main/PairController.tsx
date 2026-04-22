@@ -9,7 +9,9 @@ import {
   Box,
   Alert,
   CircularProgress,
+  Stack,
 } from '@mui/material';
+import { CameraAlt, QrCodeScanner, CheckCircle } from '@mui/icons-material';
 import { pairController, Controller } from '../../services/controllerService';
 
 const normalizeControllerToken = (value: string): string => {
@@ -175,15 +177,21 @@ const PairController: React.FC = () => {
   };
 
   return (
-    <Container maxWidth="sm" sx={{ py: 3 }}>
-      <Paper elevation={3} sx={{ p: 3 }}>
-        <Typography variant="h5" gutterBottom>
-          Scan Controller QR
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Scan the QR code on the controller and enter the pairing token below. The backend now
-          supports one-time pairing tokens and still accepts the legacy controller ID for older
-          devices.
+    <Container maxWidth="md" sx={{ py: { xs: 2, md: 3 } }}>
+      <Paper elevation={0} sx={{ p: { xs: 2.5, md: 3.5 }, borderRadius: 2, border: '1px solid rgba(60, 57, 17, 0.1)' }}>
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}>
+          <Box sx={{ p: 1, borderRadius: 2, bgcolor: 'rgba(235, 79, 18, 0.12)' }}>
+            <QrCodeScanner color="secondary" />
+          </Box>
+          <Box>
+            <Typography variant="overline" color="secondary" fontWeight={800}>
+              Pairing flow
+            </Typography>
+            <Typography variant="h4">Scan Controller QR</Typography>
+          </Box>
+        </Stack>
+        <Typography color="text.secondary" sx={{ mb: 2, maxWidth: 680 }}>
+          Scan the QR code on the controller or enter the pairing token manually. One-time tokens and legacy controller IDs are both supported.
         </Typography>
 
         {error && (
@@ -197,21 +205,22 @@ const PairController: React.FC = () => {
             {isScannerSupported ? (
               <Box sx={{ mb: 2 }}>
                 {!isCameraRunning ? (
-                  <Button variant="outlined" fullWidth onClick={startCamera}>
+                  <Button variant="outlined" fullWidth onClick={startCamera} startIcon={<CameraAlt />}>
                     Start Camera Scanner
                   </Button>
                 ) : (
-                  <Button variant="outlined" color="secondary" fullWidth onClick={stopCamera}>
+                  <Button variant="outlined" color="secondary" fullWidth onClick={stopCamera} startIcon={<CameraAlt />}>
                     Stop Camera Scanner
                   </Button>
                 )}
                 <Box
                   sx={{
                     mt: 1,
-                    borderRadius: 1,
+                    borderRadius: 2,
                     overflow: 'hidden',
                     border: '1px solid',
                     borderColor: 'divider',
+                    bgcolor: '#262411',
                     display: isCameraRunning ? 'block' : 'none',
                   }}
                 >
@@ -242,6 +251,7 @@ const PairController: React.FC = () => {
             <Button
               type="submit"
               variant="contained"
+              color="secondary"
               fullWidth
               sx={{ mt: 2 }}
               disabled={loading}
@@ -252,7 +262,10 @@ const PairController: React.FC = () => {
         ) : (
           <Box>
             <Alert severity="success" sx={{ mb: 2 }}>
-              Controller paired successfully.
+              <Stack direction="row" spacing={1} alignItems="center">
+                <CheckCircle fontSize="small" />
+                <span>Controller paired successfully.</span>
+              </Stack>
             </Alert>
             <Typography variant="body1" sx={{ mb: 1 }}>
               Next step: fix the controller and sensors in place, then power them on.
@@ -260,7 +273,7 @@ const PairController: React.FC = () => {
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
               Once powered, click Configure to view this controller and set up connected sensors.
             </Typography>
-            <Button variant="contained" fullWidth onClick={handleConfigure}>
+            <Button variant="contained" color="secondary" fullWidth onClick={handleConfigure}>
               Configure
             </Button>
           </Box>

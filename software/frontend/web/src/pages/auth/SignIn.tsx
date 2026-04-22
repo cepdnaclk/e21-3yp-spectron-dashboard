@@ -8,7 +8,9 @@ import {
   Typography,
   Box,
   Alert,
+  Stack,
 } from '@mui/material';
+import { Spa, Sensors } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 
 const SignIn: React.FC = () => {
@@ -40,52 +42,88 @@ const SignIn: React.FC = () => {
   };
 
   return (
-    <Container maxWidth="sm" sx={{ mt: 8 }}>
-      <Paper elevation={3} sx={{ p: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom align="center">
-          Welcome to Spectron
-        </Typography>
-        <Typography variant="body1" color="text.secondary" align="center" sx={{ mb: 3 }}>
-          Sign in to manage your monitoring kit
-        </Typography>
-
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-
-        <Box component="form" onSubmit={handleSubmit}>
-          <TextField
-            fullWidth
-            label="Email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            margin="normal"
-            required
-            disabled={loading}
-          />
-          <TextField
-            fullWidth
-            label="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            margin="normal"
-            required
-            disabled={loading}
-          />
-          <Button
-            type="submit"
-            fullWidth
-            variant="contained"
-            sx={{ mt: 3, mb: 2 }}
-            disabled={loading}
-          >
-            Sign In
-          </Button>
-          <Typography align="center">
-            Don't have an account? <Link to="/signup">Sign Up</Link>
-          </Typography>
+    <Container maxWidth="lg" sx={{ minHeight: '100vh', display: 'grid', alignItems: 'center', py: 4 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1.05fr 0.95fr' }, gap: 3, alignItems: 'stretch' }}>
+        <Box
+          sx={{
+            p: { xs: 3, md: 5 },
+            borderRadius: 2,
+            bgcolor: '#3c3911',
+            color: '#fffdf8',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            minHeight: { xs: 280, md: 560 },
+            overflow: 'hidden',
+            position: 'relative',
+          }}
+        >
+          <Box sx={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', bgcolor: 'rgba(235, 79, 18, 0.24)', right: -60, top: -50 }} />
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ position: 'relative' }}>
+            <Box sx={{ p: 1, borderRadius: 2, bgcolor: 'secondary.main' }}>
+              <Spa />
+            </Box>
+            <Typography variant="h5">Spectron</Typography>
+          </Stack>
+          <Box sx={{ position: 'relative', maxWidth: 520 }}>
+            <Typography variant="h4">Smart monitoring that feels alive.</Typography>
+            <Typography sx={{ mt: 1.5, color: 'rgba(255, 253, 248, 0.76)' }}>
+              Sign in to manage controllers, configure AI-assisted sensors, and keep your environment readings easy to understand.
+            </Typography>
+          </Box>
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ position: 'relative', color: '#e1c7a3' }}>
+            <Sensors />
+            <Typography variant="body2" fontWeight={800}>Real-time IoT dashboard</Typography>
+          </Stack>
         </Box>
-      </Paper>
+
+        <Paper elevation={0} sx={{ p: { xs: 3, md: 4 }, borderRadius: 2, border: '1px solid rgba(60, 57, 17, 0.1)', alignSelf: 'center' }}>
+          <Typography variant="h4" component="h1" gutterBottom>
+            Welcome back
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            Sign in to manage your monitoring kit.
+          </Typography>
+
+          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+          <Box component="form" onSubmit={handleSubmit}>
+            <TextField
+              fullWidth
+              label="Email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              margin="normal"
+              required
+              disabled={loading}
+            />
+            <TextField
+              fullWidth
+              label="Password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              margin="normal"
+              required
+              disabled={loading}
+            />
+            <Button
+              type="submit"
+              fullWidth
+              variant="contained"
+              color="secondary"
+              sx={{ mt: 3, mb: 2 }}
+              disabled={loading}
+            >
+              Sign In
+            </Button>
+            <Typography align="center">
+              Don't have an account? <Link to="/signup">Sign Up</Link>
+            </Typography>
+          </Box>
+        </Paper>
+      </Box>
     </Container>
   );
 };

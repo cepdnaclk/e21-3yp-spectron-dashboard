@@ -12,6 +12,7 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
+import { AutoGraph, CheckCircle, Sensors, TipsAndUpdates } from '@mui/icons-material';
 import {
   ResponsiveContainer,
   LineChart,
@@ -131,28 +132,49 @@ const Monitoring: React.FC = () => {
   };
 
   return (
-    <Container sx={{ py: 3 }}>
-      <Typography variant="h5" gutterBottom>
-        Monitoring Dashboard
-      </Typography>
+    <Container maxWidth="xl" sx={{ py: { xs: 2, md: 3 } }}>
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="overline" color="secondary" fontWeight={800}>
+          Live environment
+        </Typography>
+        <Typography variant="h4">Monitoring Dashboard</Typography>
+        <Typography color="text.secondary" sx={{ mt: 0.5, maxWidth: 680 }}>
+          Follow sensor health, configuration readiness, and seven-day movement across the fleet.
+        </Typography>
+      </Box>
 
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
         <Card sx={{ flex: 1 }}>
-          <CardContent>
-            <Typography variant="subtitle2" color="text.secondary">Total Sensors</Typography>
-            <Typography variant="h5">{summary.total}</Typography>
+          <CardContent sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            <Box sx={{ p: 1.2, borderRadius: 2, bgcolor: 'rgba(108, 137, 48, 0.12)' }}>
+              <Sensors color="primary" />
+            </Box>
+            <Box>
+              <Typography variant="subtitle2" color="text.secondary">Total Sensors</Typography>
+              <Typography variant="h5">{summary.total}</Typography>
+            </Box>
           </CardContent>
         </Card>
         <Card sx={{ flex: 1 }}>
-          <CardContent>
-            <Typography variant="subtitle2" color="text.secondary">Online Sensors</Typography>
-            <Typography variant="h5">{summary.online}</Typography>
+          <CardContent sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            <Box sx={{ p: 1.2, borderRadius: 2, bgcolor: 'rgba(108, 137, 48, 0.12)' }}>
+              <CheckCircle color="primary" />
+            </Box>
+            <Box>
+              <Typography variant="subtitle2" color="text.secondary">Online Sensors</Typography>
+              <Typography variant="h5">{summary.online}</Typography>
+            </Box>
           </CardContent>
         </Card>
         <Card sx={{ flex: 1 }}>
-          <CardContent>
-            <Typography variant="subtitle2" color="text.secondary">Configured Sensors</Typography>
-            <Typography variant="h5">{summary.configured}</Typography>
+          <CardContent sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            <Box sx={{ p: 1.2, borderRadius: 2, bgcolor: 'rgba(235, 79, 18, 0.12)' }}>
+              <AutoGraph color="secondary" />
+            </Box>
+            <Box>
+              <Typography variant="subtitle2" color="text.secondary">Configured Sensors</Typography>
+              <Typography variant="h5">{summary.configured}</Typography>
+            </Box>
           </CardContent>
         </Card>
       </Stack>
@@ -186,7 +208,7 @@ const Monitoring: React.FC = () => {
             return (
               <Grid item xs={12} md={6} key={item.sensor.id}>
                 <Card>
-                  <CardContent>
+                  <CardContent sx={{ p: 2.5 }}>
                     <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
                       <Typography variant="h6">
                         {item.sensor.name || `${item.sensor.type} Sensor`}
@@ -219,7 +241,7 @@ const Monitoring: React.FC = () => {
                       <Box sx={{ width: '100%', height: 220 }}>
                         <ResponsiveContainer>
                           <LineChart data={item.trend} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" />
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(60, 57, 17, 0.12)" />
                             <XAxis dataKey="day" />
                             <YAxis />
                             <Tooltip />
@@ -244,8 +266,9 @@ const Monitoring: React.FC = () => {
       )}
 
       <Card sx={{ mt: 3 }}>
-        <CardContent>
-          <Typography>
+        <CardContent sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+          <TipsAndUpdates color="secondary" />
+          <Typography color="text.secondary">
             Tip: sensors marked as <strong>Not Active</strong> are either not configured yet or currently offline.
             Configure a sensor and keep the controller online to activate continuous monitoring.
           </Typography>

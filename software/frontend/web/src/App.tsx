@@ -16,11 +16,131 @@ import Layout from './components/Layout';
 
 const theme = createTheme({
   palette: {
+    mode: 'light',
     primary: {
-      main: '#6200ee',
+      main: '#6c8930',
+      light: '#8fae45',
+      dark: '#3c3911',
+      contrastText: '#fffdf8',
     },
     secondary: {
-      main: '#03dac4',
+      main: '#eb4f12',
+      light: '#f37b3f',
+      dark: '#a93910',
+      contrastText: '#fffdf8',
+    },
+    background: {
+      default: '#faf0ea',
+      paper: '#fffdf8',
+    },
+    text: {
+      primary: '#262411',
+      secondary: '#6a624f',
+    },
+    success: {
+      main: '#6c8930',
+    },
+    warning: {
+      main: '#dba048',
+    },
+    error: {
+      main: '#da3608',
+    },
+    info: {
+      main: '#337a85',
+    },
+  },
+  shape: {
+    borderRadius: 8,
+  },
+  typography: {
+    fontFamily:
+      '"Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, "Roboto", "Helvetica Neue", Arial, sans-serif',
+    h4: {
+      fontWeight: 800,
+      letterSpacing: 0,
+    },
+    h5: {
+      fontWeight: 800,
+      letterSpacing: 0,
+    },
+    h6: {
+      fontWeight: 750,
+      letterSpacing: 0,
+    },
+    button: {
+      fontWeight: 750,
+      letterSpacing: 0,
+      textTransform: 'none',
+    },
+  },
+  components: {
+    MuiCssBaseline: {
+      styleOverrides: {
+        body: {
+          backgroundColor: '#faf0ea',
+        },
+      },
+    },
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          border: '1px solid rgba(60, 57, 17, 0.1)',
+          borderRadius: 8,
+          boxShadow: '0 18px 44px rgba(60, 57, 17, 0.08)',
+          backgroundImage: 'none',
+        },
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          backgroundImage: 'none',
+        },
+      },
+    },
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+          minHeight: 44,
+        },
+        containedPrimary: {
+          boxShadow: '0 14px 28px rgba(108, 137, 48, 0.24)',
+        },
+        containedSecondary: {
+          boxShadow: '0 14px 28px rgba(235, 79, 18, 0.22)',
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+          fontWeight: 750,
+        },
+      },
+    },
+    MuiTextField: {
+      defaultProps: {
+        variant: 'outlined',
+      },
+    },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+          backgroundColor: '#fffdf8',
+        },
+      },
+    },
+    MuiAlert: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+          border: '1px solid rgba(60, 57, 17, 0.1)',
+        },
+      },
     },
   },
 });

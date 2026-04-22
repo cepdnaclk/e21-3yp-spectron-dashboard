@@ -8,7 +8,9 @@ import {
   Box,
   CircularProgress,
   Button,
+  Stack,
 } from '@mui/material';
+import { NotificationsActive, DoneAll } from '@mui/icons-material';
 import { getAlerts, acknowledgeAlert, Alert as AlertItem } from '../../services/alertService';
 import { format } from 'date-fns';
 
@@ -63,36 +65,51 @@ const Alerts: React.FC = () => {
   }
 
   return (
-    <Container sx={{ py: 3 }}>
-      <Typography variant="h5" gutterBottom>
-        Alerts
-      </Typography>
+    <Container maxWidth="lg" sx={{ py: { xs: 2, md: 3 } }}>
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="overline" color="secondary" fontWeight={800}>
+          Attention center
+        </Typography>
+        <Typography variant="h4">Alerts</Typography>
+        <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+          Review critical events and clear resolved notifications.
+        </Typography>
+      </Box>
 
       {alerts.length === 0 ? (
         <Card>
-          <CardContent>
-            <Typography align="center" color="text.secondary">
-              No alerts. You're all caught up!
+          <CardContent sx={{ py: 6, textAlign: 'center' }}>
+            <DoneAll color="primary" sx={{ fontSize: 46, mb: 1 }} />
+            <Typography variant="h6">No alerts</Typography>
+            <Typography color="text.secondary">
+              You are all caught up.
             </Typography>
           </CardContent>
         </Card>
       ) : (
         alerts.map((alert) => (
           <Card key={alert.id} sx={{ mb: 2, opacity: alert.acknowledged_at ? 0.7 : 1 }}>
-            <CardContent>
-              <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                <Typography variant="h6">
-                  {alert.type.replace(/_/g, ' ')}
-                </Typography>
+            <CardContent sx={{ p: 2.5 }}>
+              <Box display="flex" justifyContent="space-between" alignItems="flex-start" gap={2} mb={1}>
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  <Box sx={{ p: 1, borderRadius: 2, bgcolor: 'rgba(235, 79, 18, 0.12)' }}>
+                    <NotificationsActive color="secondary" />
+                  </Box>
+                  <Box>
+                    <Typography variant="h6">
+                      {alert.type.replace(/_/g, ' ')}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {format(new Date(alert.created_at), 'MMM dd, yyyy HH:mm')}
+                    </Typography>
+                  </Box>
+                </Stack>
                 <Chip
                   label={alert.severity}
                   color={getSeverityColor(alert.severity) as any}
                   size="small"
                 />
               </Box>
-              <Typography variant="body2" color="text.secondary" gutterBottom>
-                {format(new Date(alert.created_at), 'MMM dd, yyyy HH:mm')}
-              </Typography>
               <Typography variant="body1" sx={{ mt: 1 }}>
                 {alert.message}
               </Typography>

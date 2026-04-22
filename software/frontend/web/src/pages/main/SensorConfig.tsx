@@ -16,6 +16,7 @@ import {
   Alert,
   Stack,
 } from '@mui/material';
+import { AutoAwesome, BatteryChargingFull, Tune } from '@mui/icons-material';
 import {
   getSensor,
   Sensor,
@@ -351,11 +352,21 @@ const SensorConfig: React.FC = () => {
   }
 
   return (
-    <Container sx={{ py: 3 }}>
-      <Paper elevation={3} sx={{ p: 3 }}>
-        <Typography variant="h5" gutterBottom>
-          Configure {sensor.type} Sensor
-        </Typography>
+    <Container maxWidth="xl" sx={{ py: { xs: 2, md: 3 } }}>
+      <Paper elevation={0} sx={{ p: { xs: 2.5, md: 3.5 }, borderRadius: 2, border: '1px solid rgba(60, 57, 17, 0.1)' }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} sx={{ mb: 2 }}>
+          <Box>
+            <Typography variant="overline" color="secondary" fontWeight={800}>
+              Sensor setup
+            </Typography>
+            <Typography variant="h4">
+              Configure {sensor.type} Sensor
+            </Typography>
+          </Box>
+          <Box sx={{ p: 1.4, borderRadius: 2, bgcolor: 'rgba(108, 137, 48, 0.12)' }}>
+            <Tune color="primary" />
+          </Box>
+        </Stack>
 
         {sensor.config_active && sensor.observation && (
           <Alert severity={observationSeverity} sx={{ mt: 2 }}>
@@ -406,12 +417,15 @@ const SensorConfig: React.FC = () => {
             <Button
               variant={setupMode === 'manual' ? 'contained' : 'outlined'}
               onClick={() => setSetupMode('manual')}
+              startIcon={<Tune />}
             >
               Manual Setup
             </Button>
             <Button
               variant={setupMode === 'ai_assisted' ? 'contained' : 'outlined'}
               onClick={() => setSetupMode('ai_assisted')}
+              color="secondary"
+              startIcon={<AutoAwesome />}
             >
               AI Support
             </Button>
@@ -549,9 +563,9 @@ const SensorConfig: React.FC = () => {
 
         {setupMode === 'ai_assisted' && (
           <Box sx={{ mt: 3 }}>
-            <Typography variant="subtitle1" gutterBottom>
-              AI Support
-            </Typography>
+          <Typography variant="subtitle1" gutterBottom>
+            AI Support
+          </Typography>
             <Typography variant="body2" color="text.secondary" gutterBottom>
               Describe what this sensor is for, then let AI draft threshold and reporting values that
               you can still fine-tune manually.
@@ -568,9 +582,11 @@ const SensorConfig: React.FC = () => {
 
             <Button
               variant="contained"
+              color="secondary"
               onClick={handleAISuggest}
               disabled={aiLoading || !purpose.trim()}
               sx={{ mt: 2 }}
+              startIcon={<AutoAwesome />}
             >
               {aiLoading ? 'Generating AI Draft...' : 'Generate AI Draft'}
             </Button>
@@ -705,6 +721,12 @@ const SensorConfig: React.FC = () => {
           <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
             Reading & Power Settings
           </Typography>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ color: 'primary.main', mb: 1 }}>
+            <BatteryChargingFull />
+            <Typography variant="body2" fontWeight={800}>
+              Estimated runtime updates as reporting frequency changes.
+            </Typography>
+          </Stack>
           <FormControl fullWidth sx={{ mt: 1 }}>
             <InputLabel id="reading-flow-type-label">Reading Flow Type</InputLabel>
             <Select
@@ -745,6 +767,7 @@ const SensorConfig: React.FC = () => {
 
         <Button
           variant="contained"
+          color="secondary"
           fullWidth
           onClick={handleSave}
           disabled={saving}

@@ -10,8 +10,10 @@ import {
   Box,
   Fab,
   CircularProgress,
+  Stack,
+  Button,
 } from '@mui/material';
-import { Add, Hub as ChipIcon } from '@mui/icons-material';
+import { Add, Hub as ChipIcon, Place, Sensors, ArrowForward } from '@mui/icons-material';
 import { getControllers, Controller } from '../../services/controllerService';
 
 const Controllers: React.FC = () => {
@@ -56,19 +58,66 @@ const Controllers: React.FC = () => {
   }
 
   return (
-    <Container sx={{ py: 3 }}>
-      <Typography variant="h5" gutterBottom>
-        Controllers
-      </Typography>
+    <Container maxWidth="xl" sx={{ py: { xs: 2, md: 3 } }}>
+      <Box
+        sx={{
+          mb: 3,
+          p: { xs: 2.5, md: 3.5 },
+          borderRadius: 2,
+          bgcolor: '#3c3911',
+          color: '#fffdf8',
+          overflow: 'hidden',
+          position: 'relative',
+        }}
+      >
+        <Box
+          sx={{
+            position: 'absolute',
+            right: { xs: -30, md: 30 },
+            top: { xs: -40, md: 18 },
+            width: 220,
+            height: 220,
+            borderRadius: '50%',
+            bgcolor: 'rgba(235, 79, 18, 0.22)',
+          }}
+        />
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" sx={{ position: 'relative' }}>
+          <Box>
+            <Typography variant="overline" sx={{ color: '#e1c7a3', fontWeight: 800 }}>
+              Controller fleet
+            </Typography>
+            <Typography variant="h4" sx={{ mt: 0.5 }}>
+              Keep every Spectron node in view.
+            </Typography>
+            <Typography sx={{ mt: 1, maxWidth: 620, color: 'rgba(255, 253, 248, 0.76)' }}>
+              Pair, configure, and monitor your connected sensing hardware from one calm workspace.
+            </Typography>
+          </Box>
+          <Button
+            variant="contained"
+            color="secondary"
+            startIcon={<Add />}
+            onClick={() => navigate('/controllers/pair')}
+            sx={{ alignSelf: { xs: 'stretch', md: 'flex-end' } }}
+          >
+            Pair Controller
+          </Button>
+        </Stack>
+      </Box>
 
-      <Grid container spacing={2} sx={{ mt: 1 }}>
+      <Grid container spacing={2}>
         {controllers.length === 0 ? (
           <Grid item xs={12}>
             <Card>
-              <CardContent>
-                <Typography align="center" color="text.secondary">
-                  No controllers found. Tap the + button to scan a QR code and add a controller.
+              <CardContent sx={{ py: 6, textAlign: 'center' }}>
+                <Sensors color="primary" sx={{ fontSize: 44, mb: 1 }} />
+                <Typography variant="h6">No controllers paired yet</Typography>
+                <Typography color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
+                  Add your first controller to start collecting field data.
                 </Typography>
+                <Button variant="contained" color="secondary" startIcon={<Add />} onClick={() => navigate('/controllers/pair')}>
+                  Pair Controller
+                </Button>
               </CardContent>
             </Card>
           </Grid>
@@ -76,13 +125,23 @@ const Controllers: React.FC = () => {
           controllers.map((controller) => (
             <Grid item xs={12} sm={6} md={4} key={controller.id}>
               <Card
-                sx={{ cursor: 'pointer' }}
+                sx={{
+                  cursor: 'pointer',
+                  height: '100%',
+                  transition: 'transform 180ms ease, box-shadow 180ms ease',
+                  '&:hover': {
+                    transform: 'translateY(-4px)',
+                    boxShadow: '0 24px 52px rgba(60, 57, 17, 0.13)',
+                  },
+                }}
                 onClick={() => navigate(`/controllers/${controller.id}`)}
               >
-                <CardContent>
-                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                    <Box display="flex" alignItems="center" gap={1}>
-                      <ChipIcon color="primary" />
+                <CardContent sx={{ p: 2.5 }}>
+                  <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
+                    <Box display="flex" alignItems="center" gap={1.5}>
+                      <Box sx={{ p: 1, borderRadius: 2, bgcolor: 'rgba(108, 137, 48, 0.12)' }}>
+                        <ChipIcon color="primary" />
+                      </Box>
                       <Typography variant="h6">
                         {controller.name || 'Unnamed Controller'}
                       </Typography>
@@ -98,11 +157,22 @@ const Controllers: React.FC = () => {
                       {controller.purpose}
                     </Typography>
                   )}
-                  {controller.location && (
-                    <Typography variant="body2" color="text.secondary">
-                      📍 {controller.location}
-                    </Typography>
-                  )}
+                  <Stack spacing={1.2} sx={{ mt: 2 }}>
+                    {controller.location && (
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Place color="secondary" fontSize="small" />
+                        <Typography variant="body2" color="text.secondary">
+                          {controller.location}
+                        </Typography>
+                      </Stack>
+                    )}
+                    <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+                      <Typography variant="caption" color="text.secondary">
+                        Hardware ID: {controller.hw_id}
+                      </Typography>
+                      <ArrowForward color="primary" fontSize="small" />
+                    </Stack>
+                  </Stack>
                 </CardContent>
               </Card>
             </Grid>
@@ -111,9 +181,9 @@ const Controllers: React.FC = () => {
       </Grid>
 
       <Fab
-        color="primary"
+        color="secondary"
         aria-label="add"
-        sx={{ position: 'fixed', bottom: 80, right: 16 }}
+        sx={{ position: 'fixed', bottom: { xs: 92, md: 28 }, right: 24 }}
         onClick={() => navigate('/controllers/pair')}
       >
         <Add />

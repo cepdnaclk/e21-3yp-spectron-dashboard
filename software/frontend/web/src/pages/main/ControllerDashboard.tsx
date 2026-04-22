@@ -13,7 +13,7 @@ import {
   Alert,
   Stack,
 } from '@mui/material';
-import { Settings, DeviceThermostat } from '@mui/icons-material';
+import { Settings, DeviceThermostat, Place, Memory, Tune } from '@mui/icons-material';
 import { getController, Controller } from '../../services/controllerService';
 import { getSensors, Sensor } from '../../services/sensorService';
 
@@ -109,7 +109,7 @@ const ControllerDashboard: React.FC = () => {
   }
 
   return (
-    <Container sx={{ py: 3 }}>
+    <Container maxWidth="xl" sx={{ py: { xs: 2, md: 3 } }}>
       {saveNotice?.configurationSaved && (
         <Alert
           severity={(saveNotice.validationWarnings || []).length > 0 ? 'warning' : 'success'}
@@ -133,31 +133,43 @@ const ControllerDashboard: React.FC = () => {
         </Alert>
       )}
 
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-            <Typography variant="h5">{controller.name || 'Unnamed Controller'}</Typography>
+      <Card sx={{ mb: 3, bgcolor: '#3c3911', color: '#fffdf8' }}>
+        <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
+          <Box display="flex" justifyContent="space-between" alignItems="flex-start" gap={2} mb={2}>
+            <Box>
+              <Typography variant="overline" sx={{ color: '#e1c7a3', fontWeight: 800 }}>
+                Controller workspace
+              </Typography>
+              <Typography variant="h4">{controller.name || 'Unnamed Controller'}</Typography>
+            </Box>
             <Chip
               label={controller.status}
               color={getStatusColor(controller.status) as any}
+              sx={{ bgcolor: controller.status === 'ONLINE' ? '#6c8930' : undefined, color: '#fffdf8' }}
             />
           </Box>
           {controller.purpose && (
-            <Typography variant="body1" color="text.secondary" gutterBottom>
+            <Typography variant="body1" sx={{ color: 'rgba(255, 253, 248, 0.76)' }} gutterBottom>
               {controller.purpose}
             </Typography>
           )}
-          {controller.location && (
-            <Typography variant="body2" color="text.secondary">
-              {controller.location}
-            </Typography>
-          )}
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 2 }}>
+            {controller.location && (
+              <Chip icon={<Place />} label={controller.location} sx={{ bgcolor: 'rgba(255, 253, 248, 0.12)', color: '#fffdf8' }} />
+            )}
+            <Chip icon={<Memory />} label={controller.hw_id} sx={{ bgcolor: 'rgba(255, 253, 248, 0.12)', color: '#fffdf8' }} />
+          </Stack>
         </CardContent>
       </Card>
 
-      <Typography variant="h6" gutterBottom>
-        Sensors ({sensors.length})
-      </Typography>
+      <Box display="flex" justifyContent="space-between" alignItems="center" gap={2}>
+        <Box>
+          <Typography variant="overline" color="secondary" fontWeight={800}>
+            Connected hardware
+          </Typography>
+          <Typography variant="h5">Sensors ({sensors.length})</Typography>
+        </Box>
+      </Box>
 
       <Grid container spacing={2} sx={{ mt: 1 }}>
         {sensors.length === 0 ? (
@@ -182,14 +194,17 @@ const ControllerDashboard: React.FC = () => {
                       ? {
                           border: '1px solid',
                           borderColor: 'success.main',
+                          boxShadow: '0 22px 48px rgba(108, 137, 48, 0.14)',
                         }
                       : undefined
                   }
                 >
-                  <CardContent>
+                  <CardContent sx={{ p: 2.5 }}>
                     <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
                       <Box display="flex" alignItems="center" gap={1}>
-                        <DeviceThermostat color="primary" />
+                        <Box sx={{ p: 1, borderRadius: 2, bgcolor: 'rgba(108, 137, 48, 0.12)' }}>
+                          <DeviceThermostat color="primary" />
+                        </Box>
                         <Typography variant="h6">
                           {sensor.name || `${sensor.type} Sensor`}
                         </Typography>
@@ -232,7 +247,7 @@ const ControllerDashboard: React.FC = () => {
                     )}
                     <Button
                       variant="outlined"
-                      startIcon={<Settings />}
+                      startIcon={sensor.config_active ? <Tune /> : <Settings />}
                       size="small"
                       sx={{ mt: 2 }}
                       onClick={() => navigate(`/sensors/${sensor.id}/config`)}
