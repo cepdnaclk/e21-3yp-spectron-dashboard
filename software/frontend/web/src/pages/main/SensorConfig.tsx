@@ -12,7 +12,6 @@ import {
   InputLabel,
   MenuItem,
   Select,
-  CircularProgress,
   Alert,
   Stack,
 } from '@mui/material';
@@ -27,6 +26,7 @@ import {
   SensorContext,
 } from '../../services/sensorService';
 import { estimateBatteryLifeDays, getSensorMetrics } from '../../utils/sensorConfig';
+import { SensorConfigSkeleton } from '../../components/LoadingSkeletons';
 
 type MetricThresholdInput = {
   min: string;
@@ -336,11 +336,7 @@ const SensorConfig: React.FC = () => {
         : 'info';
 
   if (loading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
-        <CircularProgress />
-      </Box>
-    );
+    return <SensorConfigSkeleton />;
   }
 
   if (!sensor) {

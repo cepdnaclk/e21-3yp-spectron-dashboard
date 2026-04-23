@@ -13,6 +13,7 @@ import Monitoring from './pages/main/Monitoring';
 import Alerts from './pages/main/Alerts';
 import Profile from './pages/main/Profile';
 import Layout from './components/Layout';
+import { AuthGateSkeleton } from './components/LoadingSkeletons';
 
 const theme = createTheme({
   palette: {
@@ -205,7 +206,7 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   
   if (loading) {
-    return <div>Loading...</div>;
+    return <AuthGateSkeleton />;
   }
   
   return user ? <>{children}</> : <Navigate to="/signin" />;

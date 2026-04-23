@@ -9,12 +9,12 @@ import {
   Chip,
   Box,
   Fab,
-  CircularProgress,
   Stack,
   Button,
 } from '@mui/material';
 import { Add, Hub as ChipIcon, Place, Sensors, ArrowForward } from '@mui/icons-material';
 import { getControllers, Controller } from '../../services/controllerService';
+import { ControllersSkeleton } from '../../components/LoadingSkeletons';
 
 const Controllers: React.FC = () => {
   const navigate = useNavigate();
@@ -50,11 +50,7 @@ const Controllers: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
-        <CircularProgress />
-      </Box>
-    );
+    return <ControllersSkeleton />;
   }
 
   return (

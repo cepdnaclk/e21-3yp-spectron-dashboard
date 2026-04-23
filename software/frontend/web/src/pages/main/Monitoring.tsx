@@ -5,7 +5,6 @@ import {
   Card,
   CardContent,
   Chip,
-  CircularProgress,
   Container,
   Grid,
   Stack,
@@ -24,6 +23,7 @@ import {
 } from 'recharts';
 import { getControllers } from '../../services/controllerService';
 import { getSensors, getSensorReadings, Sensor, SensorReading } from '../../services/sensorService';
+import { MonitoringSkeleton } from '../../components/LoadingSkeletons';
 
 type SensorMonitoringItem = {
   controllerName: string;
@@ -131,6 +131,10 @@ const Monitoring: React.FC = () => {
       : { label: 'Not Active', color: 'default' as const };
   };
 
+  if (loading) {
+    return <MonitoringSkeleton />;
+  }
+
   return (
     <Container maxWidth="xl" sx={{ py: { xs: 2, md: 3 } }}>
       <Box sx={{ mb: 3 }}>
@@ -178,12 +182,6 @@ const Monitoring: React.FC = () => {
           </CardContent>
         </Card>
       </Stack>
-
-      {loading && (
-        <Box display="flex" justifyContent="center" alignItems="center" minHeight="30vh">
-          <CircularProgress />
-        </Box>
-      )}
 
       {errorMessage && !loading && (
         <Alert severity="error" sx={{ mb: 2 }}>

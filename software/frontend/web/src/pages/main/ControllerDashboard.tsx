@@ -9,13 +9,13 @@ import {
   Chip,
   Box,
   Grid,
-  CircularProgress,
   Alert,
   Stack,
 } from '@mui/material';
 import { Settings, DeviceThermostat, Place, Memory, Tune } from '@mui/icons-material';
 import { getController, Controller } from '../../services/controllerService';
 import { getSensors, Sensor } from '../../services/sensorService';
+import { ControllerDashboardSkeleton } from '../../components/LoadingSkeletons';
 
 type DashboardNavigationState = {
   configurationSaved?: boolean;
@@ -93,11 +93,7 @@ const ControllerDashboard: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
-        <CircularProgress />
-      </Box>
-    );
+    return <ControllerDashboardSkeleton />;
   }
 
   if (!controller) {

@@ -6,13 +6,13 @@ import {
   Typography,
   Chip,
   Box,
-  CircularProgress,
   Button,
   Stack,
 } from '@mui/material';
 import { NotificationsActive, DoneAll } from '@mui/icons-material';
 import { getAlerts, acknowledgeAlert, Alert as AlertItem } from '../../services/alertService';
 import { format } from 'date-fns';
+import { AlertsSkeleton } from '../../components/LoadingSkeletons';
 
 const Alerts: React.FC = () => {
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
@@ -57,11 +57,7 @@ const Alerts: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
-        <CircularProgress />
-      </Box>
-    );
+    return <AlertsSkeleton />;
   }
 
   return (
