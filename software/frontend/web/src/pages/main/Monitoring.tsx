@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
+  Button,
   Card,
   CardContent,
   Chip,
@@ -11,7 +12,7 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import { AutoGraph, CheckCircle, Sensors, TipsAndUpdates } from '@mui/icons-material';
+import { AutoGraph, CheckCircle, Refresh, Sensors, TipsAndUpdates } from '@mui/icons-material';
 import {
   ResponsiveContainer,
   LineChart,
@@ -48,16 +49,18 @@ const toReadingValue = (reading: SensorReading): number | null => {
 const Monitoring: React.FC = () => {
   const theme = useTheme();
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [items, setItems] = useState<SensorMonitoringItem[]>([]);
 
-  useEffect(() => {
-    loadMonitoringData();
-  }, []);
-
-  const loadMonitoringData = async () => {
+  const loadMonitoringData = useCallback(async ({ showSkeleton = false }: { showSkeleton?: boolean } = {}) => {
     try {
-      setLoading(true);
+      if (showSkeleton) {
+        setLoading(true);
+      } else {
+        setRefreshing(true);
+      }
       setErrorMessage(null);
 
       const controllers = await getControllers();
@@ -109,12 +112,31 @@ const Monitoring: React.FC = () => {
       );
 
       setItems(withReadings);
+      setLastUpdatedAt(new Date());
     } catch (error) {
       console.error('Failed to load monitoring data:', error);
       setErrorMessage('Failed to load monitoring data. Please try again.');
     } finally {
-      setLoading(false);
+      if (showSkeleton) {
+        setLoading(false);
+      }
+      setRefreshing(false);
     }
+  }, []);
+
+  useEffect(() => {
+    loadMonitoringData({ showSkeleton: true });
+    const intervalId = window.setInterval(() => {
+      loadMonitoringData({ showSkeleton: false });
+    }, 20000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [loadMonitoringData]);
+
+  const handleManualRefresh = () => {
+    loadMonitoringData({ showSkeleton: false });
   };
 
   const summary = useMemo(() => {
@@ -144,11 +166,29 @@ const Monitoring: React.FC = () => {
         <Typography variant="overline" color="secondary" fontWeight={800}>
           Live environment
         </Typography>
-        <Typography variant="h4">Monitoring Dashboard</Typography>
-        <Typography color="text.secondary" sx={{ mt: 0.5, maxWidth: 680 }}>
-          Follow sensor health and recent movement across the fleet. Configuration is optional for
-          this first controller-to-UI verification pass.
-        </Typography>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }}>
+          <Box>
+            <Typography variant="h4">Monitoring Dashboard</Typography>
+            <Typography color="text.secondary" sx={{ mt: 0.5, maxWidth: 680 }}>
+              Follow sensor health and recent movement across the fleet. Configuration is optional
+              for this first controller-to-UI verification pass.
+            </Typography>
+            {lastUpdatedAt && (
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                Last updated {lastUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </Typography>
+            )}
+          </Box>
+          <Button
+            variant="outlined"
+            startIcon={<Refresh />}
+            onClick={handleManualRefresh}
+            disabled={refreshing}
+            sx={{ alignSelf: { xs: 'stretch', sm: 'center' } }}
+          >
+            {refreshing ? 'Refreshing...' : 'Refresh'}
+          </Button>
+        </Stack>
       </Box>
 
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
