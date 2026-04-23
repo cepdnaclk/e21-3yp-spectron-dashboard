@@ -55,10 +55,9 @@ func RegisterRoutes(r chi.Router, db *pgxpool.Pool, allowedOrigins []string, raw
 	ingestHandler := NewIngestHandler(db, rawReadingsPublisher)
 
 	// Public routes
-	r.Route("/auth", func(r chi.Router) {
-		r.Post("/register", authHandler.Register)
-		r.Post("/login", authHandler.Login)
-	})
+	r.Post("/auth/register", authHandler.Register)
+	r.Post("/auth/login", authHandler.Login)
+	r.Post("/api/iot/discover", ingestHandler.Discover)
 	r.Post("/api/iot/upload", ingestHandler.Upload)
 
 	// Protected routes
@@ -67,6 +66,8 @@ func RegisterRoutes(r chi.Router, db *pgxpool.Pool, allowedOrigins []string, raw
 
 		// Auth
 		r.Get("/auth/me", authHandler.Me)
+		r.Patch("/auth/me", authHandler.UpdateProfile)
+		r.Post("/auth/change-password", authHandler.ChangePassword)
 		r.Get("/users", authHandler.ListUsers)
 
 		// Controllers

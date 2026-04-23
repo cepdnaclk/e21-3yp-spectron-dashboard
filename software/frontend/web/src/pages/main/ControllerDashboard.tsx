@@ -92,6 +92,16 @@ const ControllerDashboard: React.FC = () => {
     }
   };
 
+  const getReadinessChip = (sensor: Sensor) => {
+    if (sensor.config_active) {
+      return { label: 'Configured', color: 'primary' as const };
+    }
+    if (sensor.status === 'OK') {
+      return { label: 'Live - config optional', color: 'success' as const };
+    }
+    return { label: 'Discovered', color: 'default' as const };
+  };
+
   if (loading) {
     return <ControllerDashboardSkeleton />;
   }
@@ -164,6 +174,10 @@ const ControllerDashboard: React.FC = () => {
             Connected hardware
           </Typography>
           <Typography variant="h5">Sensors ({sensors.length})</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            Configuration is optional for this hardware verification run. First confirm that
+            discovered sensors and live readings reach the UI.
+          </Typography>
         </Box>
       </Box>
 
@@ -181,6 +195,7 @@ const ControllerDashboard: React.FC = () => {
         ) : (
           sensors.map((sensor) => {
             const observationChip = getObservationChip(sensor);
+            const readinessChip = getReadinessChip(sensor);
 
             return (
               <Grid item xs={12} sm={6} key={sensor.id}>
@@ -217,8 +232,8 @@ const ControllerDashboard: React.FC = () => {
                     <Stack direction="row" spacing={1} sx={{ mb: 1.5, flexWrap: 'wrap' }}>
                       <Chip
                         size="small"
-                        label={sensor.config_active ? 'Configured' : 'Needs Setup'}
-                        color={sensor.config_active ? 'primary' : 'default'}
+                        label={readinessChip.label}
+                        color={readinessChip.color}
                       />
                       {observationChip && (
                         <Chip
@@ -236,9 +251,13 @@ const ControllerDashboard: React.FC = () => {
                       <Typography variant="body2" color="text.secondary" fontStyle="italic">
                         {sensor.observation?.message || 'Configured and collecting live readings for later review.'}
                       </Typography>
+                    ) : sensor.status === 'OK' ? (
+                      <Typography variant="body2" color="text.secondary" fontStyle="italic">
+                        Sensor is discovered and can show readings now. Configuration can be added later.
+                      </Typography>
                     ) : (
                       <Typography variant="body2" color="text.secondary" fontStyle="italic">
-                        Set thresholds manually or use AI support to draft a starting point.
+                        Sensor discovered. Send a reading packet from the controller to confirm live data.
                       </Typography>
                     )}
                     <Button
@@ -248,7 +267,7 @@ const ControllerDashboard: React.FC = () => {
                       sx={{ mt: 2 }}
                       onClick={() => navigate(`/sensors/${sensor.id}/config`)}
                     >
-                      {sensor.config_active ? 'Review Configuration' : 'Configure'}
+                      {sensor.config_active ? 'Review Configuration' : 'Configure Later'}
                     </Button>
                   </CardContent>
                 </Card>

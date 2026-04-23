@@ -14,10 +14,23 @@ type UploadRequest struct {
 	Sensors  []SensorUpload `json:"sensors"`
 }
 
+type SensorDiscoveryRequest struct {
+	DeviceID string            `json:"deviceId"`
+	TS       int64             `json:"ts,omitempty"`
+	Sensors  []SensorDiscovery `json:"sensors"`
+}
+
 type SensorUpload struct {
 	ID    string  `json:"id"`
 	Type  string  `json:"type"`
 	Value float64 `json:"v"`
+}
+
+type SensorDiscovery struct {
+	ID   string `json:"id"`
+	Type string `json:"type"`
+	Name string `json:"name,omitempty"`
+	Unit string `json:"unit,omitempty"`
 }
 
 type RawReadingsEvent struct {
@@ -90,6 +103,26 @@ func ValidateUploadRequest(req UploadRequest) error {
 	}
 	if len(req.Sensors) == 0 {
 		return fmt.Errorf("at least one sensor reading is required")
+	}
+
+	for _, sensor := range req.Sensors {
+		if strings.TrimSpace(sensor.ID) == "" {
+			return fmt.Errorf("sensor id is required")
+		}
+		if strings.TrimSpace(sensor.Type) == "" {
+			return fmt.Errorf("sensor type is required")
+		}
+	}
+
+	return nil
+}
+
+func ValidateSensorDiscoveryRequest(req SensorDiscoveryRequest) error {
+	if strings.TrimSpace(req.DeviceID) == "" {
+		return fmt.Errorf("deviceId is required")
+	}
+	if len(req.Sensors) == 0 {
+		return fmt.Errorf("at least one sensor is required")
 	}
 
 	for _, sensor := range req.Sensors {

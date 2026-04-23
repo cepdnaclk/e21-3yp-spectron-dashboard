@@ -120,15 +120,18 @@ const Monitoring: React.FC = () => {
   const summary = useMemo(() => {
     const total = items.length;
     const online = items.filter((item) => item.sensor.status === 'OK').length;
-    const configured = items.filter((item) => item.sensor.config_active).length;
-    return { total, online, configured };
+    const receiving = items.filter((item) => item.trend.length > 0).length;
+    return { total, online, receiving };
   }, [items]);
 
-  const getSensorActivityChip = (sensor: Sensor) => {
-    const isActive = sensor.config_active && sensor.status === 'OK';
-    return isActive
-      ? { label: 'Active', color: 'success' as const }
-      : { label: 'Not Active', color: 'default' as const };
+  const getSensorActivityChip = (sensor: Sensor, trendLength: number) => {
+    if (trendLength > 0) {
+      return { label: 'Receiving Data', color: 'success' as const };
+    }
+    if (sensor.status === 'OK') {
+      return { label: 'Discovered', color: 'info' as const };
+    }
+    return { label: 'Waiting', color: 'default' as const };
   };
 
   if (loading) {
@@ -143,7 +146,8 @@ const Monitoring: React.FC = () => {
         </Typography>
         <Typography variant="h4">Monitoring Dashboard</Typography>
         <Typography color="text.secondary" sx={{ mt: 0.5, maxWidth: 680 }}>
-          Follow sensor health, configuration readiness, and seven-day movement across the fleet.
+          Follow sensor health and recent movement across the fleet. Configuration is optional for
+          this first controller-to-UI verification pass.
         </Typography>
       </Box>
 
@@ -176,8 +180,8 @@ const Monitoring: React.FC = () => {
               <AutoGraph color="secondary" />
             </Box>
             <Box>
-              <Typography variant="subtitle2" color="text.secondary">Configured Sensors</Typography>
-              <Typography variant="h5">{summary.configured}</Typography>
+              <Typography variant="subtitle2" color="text.secondary">Receiving Data</Typography>
+              <Typography variant="h5">{summary.receiving}</Typography>
             </Box>
           </CardContent>
         </Card>
@@ -193,7 +197,8 @@ const Monitoring: React.FC = () => {
         <Card>
           <CardContent>
             <Typography color="text.secondary">
-              No sensors available yet. Pair a controller and configure sensors to start monitoring.
+              No sensors available yet. Pair a controller, then send the controller discovery packet
+              so sensors can appear here.
             </Typography>
           </CardContent>
         </Card>
@@ -202,7 +207,7 @@ const Monitoring: React.FC = () => {
       {!loading && !errorMessage && items.length > 0 && (
         <Grid container spacing={2}>
           {items.map((item) => {
-            const activity = getSensorActivityChip(item.sensor);
+            const activity = getSensorActivityChip(item.sensor, item.trend.length);
             return (
               <Grid item xs={12} md={6} key={item.sensor.id}>
                 <Card>
@@ -222,7 +227,7 @@ const Monitoring: React.FC = () => {
                       <Chip size="small" label={`Runtime: ${item.sensor.status}`} color={item.sensor.status === 'OK' ? 'success' : 'default'} />
                       <Chip
                         size="small"
-                        label={item.sensor.config_active ? 'Configured' : 'Not Configured'}
+                        label={item.sensor.config_active ? 'Configured' : 'Config Optional'}
                         color={item.sensor.config_active ? 'primary' : 'default'}
                       />
                     </Stack>
@@ -267,8 +272,8 @@ const Monitoring: React.FC = () => {
         <CardContent sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
           <TipsAndUpdates color="secondary" />
           <Typography color="text.secondary">
-            Tip: sensors marked as <strong>Not Active</strong> are either not configured yet or currently offline.
-            Configure a sensor and keep the controller online to activate continuous monitoring.
+            Tip: for this test phase, a sensor only needs to be discovered and receive at least one
+            reading to appear here. Threshold configuration can be completed later.
           </Typography>
         </CardContent>
       </Card>
