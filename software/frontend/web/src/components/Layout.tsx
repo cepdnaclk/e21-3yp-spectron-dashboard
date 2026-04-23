@@ -8,7 +8,6 @@ import {
   Avatar,
   Stack,
   ButtonBase,
-  Chip,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -174,7 +173,7 @@ const Layout: React.FC = () => {
           sx={{
             px: { xs: 2, md: 4 },
             pt: { xs: 2, md: 3 },
-            pb: 1,
+            pb: { xs: 1, md: 0 },
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
@@ -188,12 +187,6 @@ const Layout: React.FC = () => {
               <Typography variant="h6">Spectron</Typography>
             </Stack>
           )}
-          <Chip
-            label="Live IoT workspace"
-            color="secondary"
-            variant="outlined"
-            sx={{ ml: 'auto', bgcolor: 'rgba(255, 253, 248, 0.72)' }}
-          />
         </Box>
         <Outlet />
       </Box>
