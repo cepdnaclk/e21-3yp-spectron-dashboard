@@ -64,6 +64,7 @@ func (h *SensorHandler) List(w http.ResponseWriter, r *http.Request) {
 			sensors.unit,
 			sensors.status,
 			(active_config.created_at IS NOT NULL) AS config_active,
+			active_config.config_json,
 			sensors.last_seen,
 			COALESCE(sensors.context_json, '{}'::jsonb),
 			active_config.created_at,
@@ -77,6 +78,7 @@ func (h *SensorHandler) List(w http.ResponseWriter, r *http.Request) {
 		LEFT JOIN LATERAL (
 			SELECT
 				sc.created_at,
+				sc.config_json,
 				NULLIF(sc.config_json->>'report_interval_per_day', '')::INTEGER AS report_interval_per_day
 			FROM sensor_configs sc
 			WHERE sc.sensor_id = sensors.id
@@ -134,6 +136,7 @@ func (h *SensorHandler) Get(w http.ResponseWriter, r *http.Request) {
 			s.unit,
 			s.status,
 			(active_config.created_at IS NOT NULL) AS config_active,
+			active_config.config_json,
 			s.last_seen,
 			COALESCE(s.context_json, '{}'::jsonb),
 			active_config.created_at,
@@ -148,6 +151,7 @@ func (h *SensorHandler) Get(w http.ResponseWriter, r *http.Request) {
 		LEFT JOIN LATERAL (
 			SELECT
 				sc.created_at,
+				sc.config_json,
 				NULLIF(sc.config_json->>'report_interval_per_day', '')::INTEGER AS report_interval_per_day
 			FROM sensor_configs sc
 			WHERE sc.sensor_id = s.id

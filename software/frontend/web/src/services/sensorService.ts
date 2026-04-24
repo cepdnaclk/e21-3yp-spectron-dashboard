@@ -11,6 +11,7 @@ export interface Sensor {
   unit?: string;
   status: 'OK' | 'OFFLINE' | 'ERROR';
   config_active?: boolean;
+  active_config?: SensorConfig;
   last_seen?: string;
   context?: SensorContext;
   observation?: SensorObservation;

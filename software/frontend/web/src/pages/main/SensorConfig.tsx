@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Container,
   Paper,
@@ -9,6 +9,7 @@ import {
   Box,
   Grid,
   FormControl,
+  IconButton,
   InputLabel,
   MenuItem,
   Select,
@@ -17,7 +18,7 @@ import {
   ToggleButton,
   ToggleButtonGroup,
 } from '@mui/material';
-import { AutoAwesome, BatteryChargingFull, Tune } from '@mui/icons-material';
+import { ArrowBack, AutoAwesome, BatteryChargingFull, Tune } from '@mui/icons-material';
 import {
   getSensor,
   Sensor,
@@ -47,6 +48,10 @@ type MetricThresholdPayload = {
 
 type SetupMode = 'manual' | 'ai_assisted';
 type ThresholdMode = 'min' | 'max' | 'range';
+type SensorConfigNavigationState = {
+  preferredSetupMode?: SetupMode;
+  returnTo?: string;
+};
 
 type AiDraftSummary = {
   explanation: string;
@@ -129,6 +134,8 @@ const toPositiveIntOrUndefined = (value: string): number | undefined => {
 const SensorConfig: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const navigationState = (location.state || null) as SensorConfigNavigationState | null;
   const [sensor, setSensor] = useState<Sensor | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -163,6 +170,20 @@ const SensorConfig: React.FC = () => {
     readingFlowType
   );
 
+  const handleBack = () => {
+    if ((window.history.state?.idx ?? 0) > 0) {
+      navigate(-1);
+      return;
+    }
+
+    if (sensor?.controller_id) {
+      navigate(`/controllers/${sensor.controller_id}`);
+      return;
+    }
+
+    navigate('/controllers');
+  };
+
   useEffect(() => {
     if (sensorMetrics.length === 0) return;
 
@@ -185,7 +206,7 @@ const SensorConfig: React.FC = () => {
 
       if (initializedSensorIdRef.current !== id) {
         setPurpose(sensorData.purpose || '');
-        setFriendlyName(sensorData.name || '');
+        setFriendlyName(sensorData.active_config?.friendly_name || sensorData.name || '');
         setDomain(sensorData.context?.domain || '');
         setEnvironmentType(sensorData.context?.environment_type || '');
         setIndoorOutdoor(sensorData.context?.indoor_outdoor || '');
@@ -195,7 +216,28 @@ const SensorConfig: React.FC = () => {
         setLocationLabel(sensorData.context?.location?.label || '');
         setHistoricalWindowDays(sensorData.context?.historical_window_days?.toString() || '14');
         setInstallationNotes(sensorData.context?.installation_notes || '');
-        setSetupMode(sensorData.purpose ? 'ai_assisted' : 'manual');
+        setReportsPerDay(sensorData.active_config?.report_interval_per_day?.toString() || '24');
+
+        const nextMetricThresholds: Record<string, MetricThresholdInput> = {};
+        const metrics = getSensorMetrics(sensorData.type || '');
+        for (const metric of metrics) {
+          const metricConfig =
+            sensorData.active_config?.metric_thresholds?.[metric.key] ||
+            (metrics.length === 1 ? sensorData.active_config?.thresholds : undefined);
+
+          nextMetricThresholds[metric.key] = {
+            mode: inferThresholdMode(metricConfig),
+            min: metricConfig?.min?.toString() || '',
+            max: metricConfig?.max?.toString() || '',
+            warningMin: metricConfig?.warning_min?.toString() || '',
+            warningMax: metricConfig?.warning_max?.toString() || '',
+          };
+        }
+        if (metrics.length > 0) {
+          setMetricThresholds(nextMetricThresholds);
+        }
+
+        setSetupMode(navigationState?.preferredSetupMode || (sensorData.purpose ? 'ai_assisted' : 'manual'));
         initializedSensorIdRef.current = id;
       }
     } catch (error) {
@@ -204,7 +246,7 @@ const SensorConfig: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, navigationState?.preferredSetupMode]);
 
   useEffect(() => {
     initializedSensorIdRef.current = null;
@@ -356,17 +398,32 @@ const SensorConfig: React.FC = () => {
         config,
       });
 
+      const successState = {
+        configurationSaved: true,
+        configuredSensorId: sensor.id,
+        configuredSensorName: response.validated_config.friendly_name,
+        validationWarnings: response.warnings || [],
+        observationMessage:
+          response.observation?.message ||
+          'The system is now observing live readings and can suggest refinements later.',
+      };
+
+      if (navigationState?.returnTo) {
+        navigate(navigationState.returnTo, {
+          replace: true,
+          state: successState,
+        });
+        return;
+      }
+
+      if ((window.history.state?.idx ?? 0) > 0) {
+        navigate(-1);
+        return;
+      }
+
       navigate(`/controllers/${sensor.controller_id}`, {
         replace: true,
-        state: {
-          configurationSaved: true,
-          configuredSensorId: sensor.id,
-          configuredSensorName: response.validated_config.friendly_name,
-          validationWarnings: response.warnings || [],
-          observationMessage:
-            response.observation?.message ||
-            'The system is now observing live readings and can suggest refinements later.',
-        },
+        state: successState,
       });
     } catch (error: any) {
       setPageError(error.response?.data?.message || 'Failed to save configuration.');
@@ -397,6 +454,33 @@ const SensorConfig: React.FC = () => {
   return (
     <Container maxWidth="xl" sx={{ py: { xs: 2, md: 3 } }}>
       <Paper elevation={0} sx={{ p: { xs: 2.5, md: 3.5 }, borderRadius: 2, border: '1px solid rgba(60, 57, 17, 0.1)' }}>
+        <Box
+          sx={{
+            position: 'sticky',
+            top: { xs: 12, md: 20 },
+            zIndex: 5,
+            display: 'flex',
+            justifyContent: 'flex-start',
+            mb: 1.5,
+            pointerEvents: 'none',
+          }}
+        >
+          <IconButton
+            aria-label="Go back"
+            onClick={handleBack}
+            sx={{
+              pointerEvents: 'auto',
+              border: '1px solid rgba(60, 57, 17, 0.12)',
+              bgcolor: '#fffdf8',
+              boxShadow: '0 12px 24px rgba(60, 57, 17, 0.08)',
+              '&:hover': {
+                bgcolor: '#fff8ed',
+              },
+            }}
+          >
+            <ArrowBack />
+          </IconButton>
+        </Box>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} sx={{ mb: 2 }}>
           <Box>
             <Typography variant="overline" color="secondary" fontWeight={800}>

@@ -11,8 +11,9 @@ import {
   Grid,
   Alert,
   Stack,
+  IconButton,
 } from '@mui/material';
-import { Settings, DeviceThermostat, Place, Memory, Tune } from '@mui/icons-material';
+import { ArrowBack, Settings, DeviceThermostat, Place, Memory, Tune } from '@mui/icons-material';
 import { getController, Controller } from '../../services/controllerService';
 import { getSensors, Sensor } from '../../services/sensorService';
 import { ControllerDashboardSkeleton } from '../../components/LoadingSkeletons';
@@ -34,6 +35,15 @@ const ControllerDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const navigationState = (location.state || null) as DashboardNavigationState | null;
   const [saveNotice, setSaveNotice] = useState<DashboardNavigationState | null>(navigationState);
+
+  const handleBack = () => {
+    if ((window.history.state?.idx ?? 0) > 0) {
+      navigate(-1);
+      return;
+    }
+
+    navigate('/controllers');
+  };
 
   const loadData = useCallback(async () => {
     if (!id) return;
@@ -116,6 +126,33 @@ const ControllerDashboard: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ py: { xs: 2, md: 3 } }}>
+      <Box
+        sx={{
+          position: 'sticky',
+          top: { xs: 12, md: 20 },
+          zIndex: 5,
+          display: 'flex',
+          justifyContent: 'flex-start',
+          mb: 1.5,
+          pointerEvents: 'none',
+        }}
+      >
+        <IconButton
+          aria-label="Go back"
+          onClick={handleBack}
+          sx={{
+            pointerEvents: 'auto',
+            border: '1px solid rgba(60, 57, 17, 0.12)',
+            bgcolor: '#fffdf8',
+            boxShadow: '0 12px 24px rgba(60, 57, 17, 0.08)',
+            '&:hover': {
+              bgcolor: '#fff8ed',
+            },
+          }}
+        >
+          <ArrowBack />
+        </IconButton>
+      </Box>
       {saveNotice?.configurationSaved && (
         <Alert
           severity={(saveNotice.validationWarnings || []).length > 0 ? 'warning' : 'success'}

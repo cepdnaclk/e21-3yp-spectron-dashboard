@@ -16,6 +16,7 @@ type Sensor struct {
 	Unit              *string            `json:"unit,omitempty"`
 	Status            string             `json:"status"` // OK, OFFLINE, ERROR
 	ConfigActive      bool               `json:"config_active"`
+	ActiveConfig      *SensorConfig      `json:"active_config,omitempty"`
 	LastSeen          *time.Time         `json:"last_seen,omitempty"`
 	Context           *SensorContext     `json:"context,omitempty"`
 	Observation       *SensorObservation `json:"observation,omitempty"`
