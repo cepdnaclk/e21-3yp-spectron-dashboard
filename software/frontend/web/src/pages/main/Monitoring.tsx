@@ -39,7 +39,13 @@ import {
   YAxis,
 } from 'recharts';
 import { getControllers } from '../../services/controllerService';
-import { getSensors, getSensorReadings, Sensor, SensorReading, SensorConfig } from '../../services/sensorService';
+import {
+  getSensors,
+  getSensorReadings,
+  Sensor,
+  SensorReading,
+  SensorConfig,
+} from '../../services/sensorService';
 import { MonitoringSkeleton } from '../../components/LoadingSkeletons';
 import { getSensorMetrics, ThresholdRange } from '../../utils/sensorConfig';
 
@@ -78,6 +84,16 @@ type ControllerMonitoringGroup = {
 const formatTimeLabel = (isoString: string) => {
   const date = new Date(isoString);
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
+const shouldRenderTick = (index: number, total: number) => {
+  if (total <= 1) {
+    return true;
+  }
+
+  const targetTicks = total <= 4 ? total : 4;
+  const interval = Math.max(1, Math.floor((total - 1) / Math.max(1, targetTicks - 1)));
+  return index === 0 || index === total - 1 || index % interval === 0;
 };
 
 const formatDateTime = (isoString?: string) => {
@@ -142,7 +158,15 @@ const getSensorIcon = (sensorType: string) => {
 };
 
 const getSensorUnit = (sensor: Sensor) => {
-  return sensor.unit || (sensor.type === 'temperature' ? 'C' : sensor.type === 'humidity' ? '%RH' : sensor.type === 'ultrasonic' ? 'cm' : '');
+  return sensor.unit || (
+    sensor.type === 'temperature'
+      ? 'C'
+      : sensor.type === 'humidity'
+        ? '%RH'
+        : sensor.type === 'ultrasonic'
+          ? 'cm'
+          : ''
+  );
 };
 
 const formatSensorValue = (value: number | null, unit?: string) => {
@@ -152,16 +176,19 @@ const formatSensorValue = (value: number | null, unit?: string) => {
   return `${value.toFixed(1)}${unit ? ` ${unit}` : ''}`;
 };
 
-const evaluateHealth = (sensor: Sensor, latestValue: number | null, threshold?: ThresholdRange): {
-  health: SensorHealth;
-  label: string;
-  insight: string;
-} => {
+const evaluateHealth = (
+  sensor: Sensor,
+  latestValue: number | null,
+  threshold?: ThresholdRange
+): { health: SensorHealth; label: string; insight: string } => {
   if (latestValue === null) {
     return {
       health: sensor.status === 'OK' ? 'inactive' : 'critical',
       label: sensor.status === 'OK' ? 'Waiting for data' : 'Offline',
-      insight: sensor.status === 'OK' ? 'Sensor is connected, but no recent readings are available yet.' : 'Sensor is not reporting right now.',
+      insight:
+        sensor.status === 'OK'
+          ? 'Sensor is connected, but no recent readings are available yet.'
+          : 'Sensor is not reporting right now.',
     };
   }
 
@@ -169,7 +196,10 @@ const evaluateHealth = (sensor: Sensor, latestValue: number | null, threshold?: 
     return {
       health: sensor.status === 'OK' ? 'normal' : 'warning',
       label: sensor.status === 'OK' ? 'Live' : 'Check sensor',
-      insight: sensor.status === 'OK' ? 'Live readings are coming in. Add thresholds to enable clearer guidance.' : 'Sensor needs attention before readings can be trusted.',
+      insight:
+        sensor.status === 'OK'
+          ? 'Live readings are coming in.'
+          : 'Sensor needs attention before readings can be trusted.',
     };
   }
 
@@ -267,7 +297,11 @@ const getTrendDelta = (trend: SensorPoint[]) => {
   return `24h change -${Math.abs(delta).toFixed(1)}`;
 };
 
-const buildUltrasonicGaugeValue = (latestValue: number | null, threshold?: ThresholdRange, trend: SensorPoint[] = []) => {
+const buildUltrasonicGaugeValue = (
+  latestValue: number | null,
+  threshold?: ThresholdRange,
+  trend: SensorPoint[] = []
+) => {
   if (latestValue === null) {
     return 0;
   }
@@ -361,7 +395,11 @@ const Monitoring: React.FC = () => {
             location: controller.location,
             status: controller.status,
             lastSeen: controller.last_seen,
-            sensors: sensorCards.sort((a, b) => a.sensor.type.localeCompare(b.sensor.type) || (a.sensor.name || '').localeCompare(b.sensor.name || '')),
+            sensors: sensorCards.sort(
+              (a, b) =>
+                a.sensor.type.localeCompare(b.sensor.type) ||
+                (a.sensor.name || '').localeCompare(b.sensor.name || '')
+            ),
           } satisfies ControllerMonitoringGroup;
         })
       );
@@ -395,7 +433,9 @@ const Monitoring: React.FC = () => {
     return {
       controllers: controllers.length,
       healthy: allSensors.filter((sensor) => sensor.health === 'normal').length,
-      needsAttention: allSensors.filter((sensor) => sensor.health === 'warning' || sensor.health === 'critical').length,
+      needsAttention: allSensors.filter(
+        (sensor) => sensor.health === 'warning' || sensor.health === 'critical'
+      ).length,
     };
   }, [controllers]);
 
@@ -423,7 +463,12 @@ const Monitoring: React.FC = () => {
             </Typography>
             {lastUpdatedAt && (
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
-                Updated {lastUpdatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                Updated{' '}
+                {lastUpdatedAt.toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit',
+                })}
               </Typography>
             )}
           </Box>
@@ -442,33 +487,39 @@ const Monitoring: React.FC = () => {
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
         <Card sx={{ flex: 1, bgcolor: '#fffaf4' }}>
           <CardContent sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            <Box sx={{ p: 1.2, borderRadius: 2, bgcolor: alpha(theme.palette.secondary.main, 0.12) }}>
+            <Box sx={{ p: 1.2, borderRadius: '50%', bgcolor: alpha(theme.palette.secondary.main, 0.12) }}>
               <DeviceHub color="secondary" />
             </Box>
             <Box>
-              <Typography variant="subtitle2" color="text.secondary">Controllers</Typography>
+              <Typography variant="subtitle2" color="text.secondary">
+                Controllers
+              </Typography>
               <Typography variant="h5">{summary.controllers}</Typography>
             </Box>
           </CardContent>
         </Card>
         <Card sx={{ flex: 1, bgcolor: '#f7fbf0' }}>
           <CardContent sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            <Box sx={{ p: 1.2, borderRadius: 2, bgcolor: alpha(theme.palette.primary.main, 0.12) }}>
+            <Box sx={{ p: 1.2, borderRadius: '50%', bgcolor: alpha(theme.palette.primary.main, 0.12) }}>
               <CheckCircle color="primary" />
             </Box>
             <Box>
-              <Typography variant="subtitle2" color="text.secondary">Within Range</Typography>
+              <Typography variant="subtitle2" color="text.secondary">
+                Within Range
+              </Typography>
               <Typography variant="h5">{summary.healthy}</Typography>
             </Box>
           </CardContent>
         </Card>
         <Card sx={{ flex: 1, bgcolor: '#fff7ef' }}>
           <CardContent sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            <Box sx={{ p: 1.2, borderRadius: 2, bgcolor: alpha(theme.palette.warning.main, 0.18) }}>
+            <Box sx={{ p: 1.2, borderRadius: '50%', bgcolor: alpha(theme.palette.warning.main, 0.18) }}>
               <WarningAmber sx={{ color: theme.palette.warning.dark }} />
             </Box>
             <Box>
-              <Typography variant="subtitle2" color="text.secondary">Needs Attention</Typography>
+              <Typography variant="subtitle2" color="text.secondary">
+                Needs Attention
+              </Typography>
               <Typography variant="h5">{summary.needsAttention}</Typography>
             </Box>
           </CardContent>
@@ -494,7 +545,9 @@ const Monitoring: React.FC = () => {
 
       <Stack spacing={2.5}>
         {controllers.map((controller) => {
-          const warningCount = controller.sensors.filter((sensor) => sensor.health === 'warning' || sensor.health === 'critical').length;
+          const warningCount = controller.sensors.filter(
+            (sensor) => sensor.health === 'warning' || sensor.health === 'critical'
+          ).length;
           const activeCount = controller.sensors.filter((sensor) => sensor.latestValue !== null).length;
 
           return (
@@ -503,7 +556,8 @@ const Monitoring: React.FC = () => {
                 sx={{
                   px: { xs: 2, md: 3 },
                   py: 2.25,
-                  background: 'linear-gradient(135deg, rgba(60, 57, 17, 0.96) 0%, rgba(80, 74, 24, 0.94) 100%)',
+                  background:
+                    'linear-gradient(135deg, rgba(60, 57, 17, 0.96) 0%, rgba(80, 74, 24, 0.94) 100%)',
                   color: '#fffdf8',
                 }}
               >
@@ -519,7 +573,8 @@ const Monitoring: React.FC = () => {
                     </Typography>
                     <Typography variant="h5">{controller.name}</Typography>
                     <Typography sx={{ color: 'rgba(255, 253, 248, 0.76)', mt: 0.5 }}>
-                      {controller.location || 'Location not set'} • Last update {formatDateTime(controller.lastSeen)}
+                      {controller.location || 'Location not set'} • Last update{' '}
+                      {formatDateTime(controller.lastSeen)}
                     </Typography>
                   </Box>
                   <Stack direction="row" spacing={1} flexWrap="wrap">
@@ -527,7 +582,10 @@ const Monitoring: React.FC = () => {
                       label={controller.status === 'ONLINE' ? 'Online' : controller.status}
                       size="small"
                       sx={{
-                        bgcolor: controller.status === 'ONLINE' ? '#6c8930' : 'rgba(255, 253, 248, 0.12)',
+                        bgcolor:
+                          controller.status === 'ONLINE'
+                            ? '#6c8930'
+                            : 'rgba(255, 253, 248, 0.12)',
                         color: '#fffdf8',
                         fontWeight: 800,
                       }}
@@ -535,13 +593,18 @@ const Monitoring: React.FC = () => {
                     <Chip
                       label={`${activeCount}/${controller.sensors.length} live`}
                       size="small"
-                      sx={{ bgcolor: 'rgba(255, 253, 248, 0.12)', color: '#fffdf8', fontWeight: 800 }}
+                      sx={{
+                        bgcolor: 'rgba(255, 253, 248, 0.12)',
+                        color: '#fffdf8',
+                        fontWeight: 800,
+                      }}
                     />
                     <Chip
                       label={warningCount > 0 ? `${warningCount} to review` : 'All calm'}
                       size="small"
                       sx={{
-                        bgcolor: warningCount > 0 ? '#dba048' : 'rgba(255, 253, 248, 0.12)',
+                        bgcolor:
+                          warningCount > 0 ? '#dba048' : 'rgba(255, 253, 248, 0.12)',
                         color: warningCount > 0 ? '#3c3911' : '#fffdf8',
                         fontWeight: 800,
                       }}
@@ -560,7 +623,9 @@ const Monitoring: React.FC = () => {
                       ? [
                           item.threshold.min !== undefined ? `Min ${item.threshold.min}` : null,
                           item.threshold.max !== undefined ? `Max ${item.threshold.max}` : null,
-                        ].filter(Boolean).join(' • ')
+                        ]
+                          .filter(Boolean)
+                          .join(' • ')
                       : item.sensor.config_active
                         ? 'Thresholds active'
                         : 'Thresholds not configured';
@@ -584,21 +649,37 @@ const Monitoring: React.FC = () => {
                             '@keyframes monitorCriticalPulse': {
                               '0%': {
                                 borderColor: alpha(theme.palette.error.main, 0.45),
-                                boxShadow: `0 0 0 0 ${alpha(theme.palette.error.main, 0.0)}, 0 14px 28px rgba(60, 57, 17, 0.06)`,
+                                boxShadow: `0 0 0 0 ${alpha(
+                                  theme.palette.error.main,
+                                  0
+                                )}, 0 14px 28px rgba(60, 57, 17, 0.06)`,
                               },
                               '50%': {
                                 borderColor: alpha(theme.palette.error.main, 0.95),
-                                boxShadow: `0 0 0 4px ${alpha(theme.palette.error.main, 0.18)}, 0 14px 28px rgba(60, 57, 17, 0.06)`,
+                                boxShadow: `0 0 0 4px ${alpha(
+                                  theme.palette.error.main,
+                                  0.18
+                                )}, 0 14px 28px rgba(60, 57, 17, 0.06)`,
                               },
                               '100%': {
                                 borderColor: alpha(theme.palette.error.main, 0.45),
-                                boxShadow: `0 0 0 0 ${alpha(theme.palette.error.main, 0.0)}, 0 14px 28px rgba(60, 57, 17, 0.06)`,
+                                boxShadow: `0 0 0 0 ${alpha(
+                                  theme.palette.error.main,
+                                  0
+                                )}, 0 14px 28px rgba(60, 57, 17, 0.06)`,
                               },
                             },
                           }}
                         >
-                          <CardContent sx={{ p: 2.25, height: '100%', display: 'flex', flexDirection: 'column' }}>
-                            <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
+                          <CardContent
+                            sx={{ p: 2.25, height: '100%', display: 'flex', flexDirection: 'column' }}
+                          >
+                            <Stack
+                              direction="row"
+                              justifyContent="space-between"
+                              alignItems="flex-start"
+                              spacing={2}
+                            >
                               <Stack direction="row" spacing={1.4} alignItems="center">
                                 <Box
                                   sx={{
@@ -615,7 +696,9 @@ const Monitoring: React.FC = () => {
                                     {item.sensor.name || `${item.sensor.type} Sensor`}
                                   </Typography>
                                   <Typography variant="body2" color="text.secondary">
-                                    {(item.sensor.purpose || item.sensor.context?.location?.label || item.sensor.hw_id)}
+                                    {item.sensor.purpose ||
+                                      item.sensor.context?.location?.label ||
+                                      item.sensor.hw_id}
                                   </Typography>
                                 </Box>
                               </Stack>
@@ -642,7 +725,9 @@ const Monitoring: React.FC = () => {
                                   {formatSensorValue(item.latestValue, getSensorUnit(item.sensor))}
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                                  {item.latestTime ? `Seen at ${formatDateTime(item.latestTime)}` : 'No timestamp available'}
+                                  {item.latestTime
+                                    ? `Seen at ${formatDateTime(item.latestTime)}`
+                                    : 'No timestamp available'}
                                 </Typography>
                               </Box>
                               <Stack spacing={0.75} sx={{ minWidth: { sm: 220 } }}>
@@ -653,7 +738,8 @@ const Monitoring: React.FC = () => {
                                   sx={{ alignSelf: 'flex-start' }}
                                 />
                                 <Typography variant="caption" color="text.secondary">
-                                  {trendDelta || 'Needs more readings to show direction'} • {thresholdSummary}
+                                  {trendDelta || 'Needs more readings to show direction'} •{' '}
+                                  {thresholdSummary}
                                 </Typography>
                               </Stack>
                             </Stack>
@@ -665,12 +751,23 @@ const Monitoring: React.FC = () => {
                                 <Stack direction="row" justifyContent="space-between" sx={{ mb: 1 }}>
                                   <Typography variant="subtitle2">Level Snapshot</Typography>
                                   <Typography variant="body2" color="text.secondary">
-                                    {Math.round(buildUltrasonicGaugeValue(item.latestValue, item.threshold, item.trend))}%
+                                    {Math.round(
+                                      buildUltrasonicGaugeValue(
+                                        item.latestValue,
+                                        item.threshold,
+                                        item.trend
+                                      )
+                                    )}
+                                    %
                                   </Typography>
                                 </Stack>
                                 <LinearProgress
                                   variant="determinate"
-                                  value={buildUltrasonicGaugeValue(item.latestValue, item.threshold, item.trend)}
+                                  value={buildUltrasonicGaugeValue(
+                                    item.latestValue,
+                                    item.threshold,
+                                    item.trend
+                                  )}
                                   sx={{
                                     height: 12,
                                     borderRadius: 999,
@@ -688,12 +785,28 @@ const Monitoring: React.FC = () => {
                                   {item.sensor.type === 'humidity' ? (
                                     <AreaChart data={item.trend}>
                                       <defs>
-                                        <linearGradient id={`humidity-fill-${item.sensor.id}`} x1="0" y1="0" x2="0" y2="1">
+                                        <linearGradient
+                                          id={`humidity-fill-${item.sensor.id}`}
+                                          x1="0"
+                                          y1="0"
+                                          x2="0"
+                                          y2="1"
+                                        >
                                           <stop offset="0%" stopColor="#337a85" stopOpacity={0.32} />
                                           <stop offset="100%" stopColor="#337a85" stopOpacity={0.02} />
                                         </linearGradient>
                                       </defs>
-                                      <XAxis dataKey="shortLabel" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#6a624f' }} />
+                                      <XAxis
+                                        dataKey="shortLabel"
+                                        tickLine={false}
+                                        axisLine={false}
+                                        interval={0}
+                                        tick={{ fontSize: 11, fill: '#6a624f' }}
+                                        tickFormatter={(value, index) =>
+                                          shouldRenderTick(index, item.trend.length) ? value : ''
+                                        }
+                                        minTickGap={24}
+                                      />
                                       <YAxis
                                         width={32}
                                         domain={['auto', 'auto']}
@@ -713,7 +826,17 @@ const Monitoring: React.FC = () => {
                                     </AreaChart>
                                   ) : (
                                     <LineChart data={item.trend}>
-                                      <XAxis dataKey="shortLabel" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#6a624f' }} />
+                                      <XAxis
+                                        dataKey="shortLabel"
+                                        tickLine={false}
+                                        axisLine={false}
+                                        interval={0}
+                                        tick={{ fontSize: 11, fill: '#6a624f' }}
+                                        tickFormatter={(value, index) =>
+                                          shouldRenderTick(index, item.trend.length) ? value : ''
+                                        }
+                                        minTickGap={24}
+                                      />
                                       <YAxis
                                         width={32}
                                         domain={['auto', 'auto']}
@@ -745,7 +868,9 @@ const Monitoring: React.FC = () => {
                               sx={{ mt: 'auto', pt: 2 }}
                             >
                               <Typography variant="caption" color="text.secondary" sx={{ pr: 1 }}>
-                                {item.sensor.config_active ? 'Configuration is active for this sensor.' : 'No configuration saved yet.'}
+                                {item.sensor.config_active
+                                  ? 'Configuration is active for this sensor.'
+                                  : 'No configuration saved yet.'}
                               </Typography>
                               <Button
                                 variant="outlined"
@@ -753,7 +878,10 @@ const Monitoring: React.FC = () => {
                                 startIcon={<Tune />}
                                 onClick={() =>
                                   navigate(`/sensors/${item.sensor.id}/config`, {
-                                    state: { preferredSetupMode: 'manual', returnTo: '/monitoring' },
+                                    state: {
+                                      preferredSetupMode: 'manual',
+                                      returnTo: '/monitoring',
+                                    },
                                   })
                                 }
                                 sx={{ alignSelf: { xs: 'stretch', sm: 'flex-end' }, ml: { sm: 'auto' } }}

@@ -256,7 +256,7 @@ const Profile: React.FC = () => {
                     fontSize: 38,
                     fontWeight: 800,
                     border: '6px solid #faf0ea',
-                    boxShadow: '0 16px 34px rgba(60, 57, 17, 0.16)',
+                    boxShadow: 'none',
                   }}
                 >
                   {initials}

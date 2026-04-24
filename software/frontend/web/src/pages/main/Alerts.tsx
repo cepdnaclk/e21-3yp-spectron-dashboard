@@ -83,12 +83,19 @@ const Alerts: React.FC = () => {
           </CardContent>
         </Card>
       ) : (
-        alerts.map((alert) => (
-          <Card key={alert.id} sx={{ mb: 2, opacity: alert.acknowledged_at ? 0.7 : 1 }}>
+        alerts.map((alert, index) => (
+          <Card
+            key={alert.id}
+            sx={{
+              mb: 2,
+              opacity: alert.acknowledged_at ? 0.7 : 1,
+              borderTop: index === 0 ? '1px solid rgba(60, 57, 17, 0.1)' : undefined,
+            }}
+          >
             <CardContent sx={{ p: 2.5 }}>
               <Box display="flex" justifyContent="space-between" alignItems="flex-start" gap={2} mb={1}>
                 <Stack direction="row" spacing={1.5} alignItems="center">
-                  <Box sx={{ p: 1, borderRadius: 2, bgcolor: 'rgba(235, 79, 18, 0.12)' }}>
+                  <Box sx={{ p: 1, borderRadius: '50%', bgcolor: 'rgba(235, 79, 18, 0.12)' }}>
                     <NotificationsActive color="secondary" />
                   </Box>
                   <Box>
@@ -106,7 +113,7 @@ const Alerts: React.FC = () => {
                   size="small"
                 />
               </Box>
-              <Typography variant="body1" sx={{ mt: 1 }}>
+              <Typography variant="body1" sx={{ mt: 1, pt: 2, borderTop: '1px solid rgba(60, 57, 17, 0.08)' }}>
                 {alert.message}
               </Typography>
               {!alert.acknowledged_at && (
