@@ -14,6 +14,8 @@ import {
   Select,
   Alert,
   Stack,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
 import { AutoAwesome, BatteryChargingFull, Tune } from '@mui/icons-material';
 import {
@@ -29,6 +31,7 @@ import { estimateBatteryLifeDays, getSensorMetrics } from '../../utils/sensorCon
 import { SensorConfigSkeleton } from '../../components/LoadingSkeletons';
 
 type MetricThresholdInput = {
+  mode: ThresholdMode;
   min: string;
   max: string;
   warningMin: string;
@@ -43,6 +46,7 @@ type MetricThresholdPayload = {
 };
 
 type SetupMode = 'manual' | 'ai_assisted';
+type ThresholdMode = 'min' | 'max' | 'range';
 
 type AiDraftSummary = {
   explanation: string;
@@ -61,11 +65,53 @@ const toNumberOrUndefined = (value: string): number | undefined => {
 };
 
 const emptyMetricThresholdInput = (): MetricThresholdInput => ({
+  mode: 'range',
   min: '',
   max: '',
   warningMin: '',
   warningMax: '',
 });
+
+const inferThresholdMode = (thresholds?: Partial<MetricThresholdPayload>): ThresholdMode => {
+  const hasMin = thresholds?.min !== undefined;
+  const hasMax = thresholds?.max !== undefined;
+
+  if (hasMin && !hasMax) {
+    return 'min';
+  }
+  if (!hasMin && hasMax) {
+    return 'max';
+  }
+  return 'range';
+};
+
+const applyThresholdMode = (
+  current: MetricThresholdInput,
+  mode: ThresholdMode
+): MetricThresholdInput => {
+  if (mode === 'min') {
+    return {
+      ...current,
+      mode,
+      max: '',
+      warningMax: '',
+    };
+  }
+
+  if (mode === 'max') {
+    return {
+      ...current,
+      mode,
+      min: '',
+      warningMin: '',
+    };
+  }
+
+  return {
+    ...current,
+    mode,
+  };
+};
 
 const toPositiveIntOrUndefined = (value: string): number | undefined => {
   if (!value || value.trim() === '') {
@@ -239,6 +285,7 @@ const SensorConfig: React.FC = () => {
           config.metric_thresholds?.[metric.key] ||
           (sensorMetrics.length === 1 ? config.thresholds : undefined);
         nextMetricThresholds[metric.key] = {
+          mode: inferThresholdMode(metricConfig),
           min: metricConfig?.min?.toString() || '',
           max: metricConfig?.max?.toString() || '',
           warningMin: metricConfig?.warning_min?.toString() || '',
@@ -635,81 +682,115 @@ const SensorConfig: React.FC = () => {
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
                 {metric.label} Thresholds
               </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                Choose whether this sensor should enforce a lower limit, an upper limit, or both.
+              </Typography>
+              <ToggleButtonGroup
+                exclusive
+                size="small"
+                color="primary"
+                value={metricThresholds[metric.key]?.mode || 'range'}
+                onChange={(_, nextMode: ThresholdMode | null) => {
+                  if (!nextMode) {
+                    return;
+                  }
+                  setMetricThresholds((current) => ({
+                    ...current,
+                    [metric.key]: applyThresholdMode(
+                      current[metric.key] || emptyMetricThresholdInput(),
+                      nextMode
+                    ),
+                  }));
+                }}
+                sx={{ mb: 2, flexWrap: 'wrap' }}
+              >
+                <ToggleButton value="min">Only Min</ToggleButton>
+                <ToggleButton value="max">Only Max</ToggleButton>
+                <ToggleButton value="range">Min + Max</ToggleButton>
+              </ToggleButtonGroup>
               <Grid container spacing={2}>
-                <Grid item xs={6}>
-                  <TextField
-                    fullWidth
-                    label="Min Value"
-                    type="number"
-                    value={metricThresholds[metric.key]?.min || ''}
-                    onChange={(e) =>
-                      setMetricThresholds((current) => ({
-                        ...current,
-                        [metric.key]: {
-                          ...(current[metric.key] || emptyMetricThresholdInput()),
-                          min: e.target.value,
-                        },
-                      }))
-                    }
-                  />
-                </Grid>
-                <Grid item xs={6}>
-                  <TextField
-                    fullWidth
-                    label="Max Value"
-                    type="number"
-                    value={metricThresholds[metric.key]?.max || ''}
-                    onChange={(e) =>
-                      setMetricThresholds((current) => ({
-                        ...current,
-                        [metric.key]: {
-                          ...(current[metric.key] || emptyMetricThresholdInput()),
-                          max: e.target.value,
-                        },
-                      }))
-                    }
-                  />
-                </Grid>
+                {metricThresholds[metric.key]?.mode !== 'max' && (
+                  <Grid item xs={12} md={metricThresholds[metric.key]?.mode === 'range' ? 6 : 12}>
+                    <TextField
+                      fullWidth
+                      label="Min Value"
+                      type="number"
+                      value={metricThresholds[metric.key]?.min || ''}
+                      onChange={(e) =>
+                        setMetricThresholds((current) => ({
+                          ...current,
+                          [metric.key]: {
+                            ...(current[metric.key] || emptyMetricThresholdInput()),
+                            min: e.target.value,
+                          },
+                        }))
+                      }
+                    />
+                  </Grid>
+                )}
+                {metricThresholds[metric.key]?.mode !== 'min' && (
+                  <Grid item xs={12} md={metricThresholds[metric.key]?.mode === 'range' ? 6 : 12}>
+                    <TextField
+                      fullWidth
+                      label="Max Value"
+                      type="number"
+                      value={metricThresholds[metric.key]?.max || ''}
+                      onChange={(e) =>
+                        setMetricThresholds((current) => ({
+                          ...current,
+                          [metric.key]: {
+                            ...(current[metric.key] || emptyMetricThresholdInput()),
+                            max: e.target.value,
+                          },
+                        }))
+                      }
+                    />
+                  </Grid>
+                )}
               </Grid>
 
               <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
                 {metric.label} Warning Thresholds (Optional)
               </Typography>
               <Grid container spacing={2}>
-                <Grid item xs={6}>
-                  <TextField
-                    fullWidth
-                    label="Warning Min"
-                    type="number"
-                    value={metricThresholds[metric.key]?.warningMin || ''}
-                    onChange={(e) =>
-                      setMetricThresholds((current) => ({
-                        ...current,
-                        [metric.key]: {
-                          ...(current[metric.key] || emptyMetricThresholdInput()),
-                          warningMin: e.target.value,
-                        },
-                      }))
-                    }
-                  />
-                </Grid>
-                <Grid item xs={6}>
-                  <TextField
-                    fullWidth
-                    label="Warning Max"
-                    type="number"
-                    value={metricThresholds[metric.key]?.warningMax || ''}
-                    onChange={(e) =>
-                      setMetricThresholds((current) => ({
-                        ...current,
-                        [metric.key]: {
-                          ...(current[metric.key] || emptyMetricThresholdInput()),
-                          warningMax: e.target.value,
-                        },
-                      }))
-                    }
-                  />
-                </Grid>
+                {metricThresholds[metric.key]?.mode !== 'max' && (
+                  <Grid item xs={12} md={metricThresholds[metric.key]?.mode === 'range' ? 6 : 12}>
+                    <TextField
+                      fullWidth
+                      label="Warning Min"
+                      type="number"
+                      value={metricThresholds[metric.key]?.warningMin || ''}
+                      onChange={(e) =>
+                        setMetricThresholds((current) => ({
+                          ...current,
+                          [metric.key]: {
+                            ...(current[metric.key] || emptyMetricThresholdInput()),
+                            warningMin: e.target.value,
+                          },
+                        }))
+                      }
+                    />
+                  </Grid>
+                )}
+                {metricThresholds[metric.key]?.mode !== 'min' && (
+                  <Grid item xs={12} md={metricThresholds[metric.key]?.mode === 'range' ? 6 : 12}>
+                    <TextField
+                      fullWidth
+                      label="Warning Max"
+                      type="number"
+                      value={metricThresholds[metric.key]?.warningMax || ''}
+                      onChange={(e) =>
+                        setMetricThresholds((current) => ({
+                          ...current,
+                          [metric.key]: {
+                            ...(current[metric.key] || emptyMetricThresholdInput()),
+                            warningMax: e.target.value,
+                          },
+                        }))
+                      }
+                    />
+                  </Grid>
+                )}
               </Grid>
             </Box>
           ))}
