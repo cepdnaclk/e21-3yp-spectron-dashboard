@@ -86,7 +86,6 @@ const Monitoring: React.FC = () => {
             const readings = await getSensorReadings(sensor.id, {
               from: from.toISOString(),
               to: to.toISOString(),
-              interval: '1 day',
             });
 
             const trend = readings
