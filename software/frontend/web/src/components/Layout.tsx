@@ -1,5 +1,5 @@
 import React from 'react';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { Link as RouterLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   Typography,
   BottomNavigation,
@@ -108,7 +108,9 @@ const Layout: React.FC = () => {
               {routes.map((item, index) => (
                 <ButtonBase
                   key={item.path}
-                  onClick={() => navigate(item.path)}
+                  component={RouterLink}
+                  to={item.path}
+                  onClick={() => setValue(index)}
                   sx={{
                     justifyContent: 'flex-start',
                     gap: 1.5,
@@ -133,13 +135,21 @@ const Layout: React.FC = () => {
               ))}
             </Stack>
 
-            <Box
+            <ButtonBase
+              onClick={() => {
+                setValue(3);
+                navigate('/profile');
+              }}
               sx={{
                 mt: 'auto',
                 p: 1.5,
                 borderRadius: 0,
                 bgcolor: 'transparent',
                 borderTop: '1px solid rgba(60, 57, 17, 0.1)',
+                display: 'block',
+                textAlign: 'left',
+                color: 'inherit',
+                textDecoration: 'none',
               }}
             >
               <Typography variant="caption" color="text.secondary">
@@ -162,7 +172,7 @@ const Layout: React.FC = () => {
                   {displayName}
                 </Typography>
               </Stack>
-            </Box>
+            </ButtonBase>
           </Box>
         </Box>
       )}
