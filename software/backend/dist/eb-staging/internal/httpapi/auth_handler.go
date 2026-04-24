@@ -39,10 +39,23 @@ type AuthResponse struct {
 }
 
 type CurrentUserResponse struct {
-	ID       uuid.UUID                  `json:"id"`
-	Email    string                     `json:"email"`
-	Phone    *string                    `json:"phone,omitempty"`
-	Accounts []CurrentUserAccountAccess `json:"accounts"`
+	ID        uuid.UUID                  `json:"id"`
+	Email     string                     `json:"email"`
+	Name      *string                    `json:"name,omitempty"`
+	Phone     *string                    `json:"phone,omitempty"`
+	AvatarURL *string                    `json:"avatar_url,omitempty"`
+	Accounts  []CurrentUserAccountAccess `json:"accounts"`
+}
+
+type UpdateProfileRequest struct {
+	Name      *string `json:"name,omitempty"`
+	Phone     *string `json:"phone,omitempty"`
+	AvatarURL *string `json:"avatar_url,omitempty"`
+}
+
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
 }
 
 type CurrentUserAccountAccess struct {
@@ -79,9 +92,9 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	// Create user
 	_, err = tx.Exec(r.Context(), `
-		INSERT INTO users (id, email, password_hash, phone)
-		VALUES ($1, $2, $3, $4)
-	`, userID, req.Email, hashedPassword, req.Phone)
+		INSERT INTO users (id, email, password_hash, phone, name)
+		VALUES ($1, $2, $3, $4, $5)
+	`, userID, req.Email, hashedPassword, req.Phone, req.Name)
 	if err != nil {
 		log.Printf("Failed to create user: %v", err)
 		// Check if it's a duplicate email error
@@ -135,6 +148,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	user := models.User{
 		ID:    userID,
 		Email: req.Email,
+		Name:  req.Name,
 		Phone: req.Phone,
 	}
 
@@ -155,14 +169,16 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var accountID uuid.UUID
 	var passwordHash string
 	var phone *string
+	var name *string
+	var avatarURL *string
 
 	err := h.db.QueryRow(r.Context(), `
-		SELECT u.id, u.password_hash, u.phone, am.account_id
+		SELECT u.id, u.password_hash, u.phone, u.name, u.avatar_url, am.account_id
 		FROM users u
 		JOIN account_memberships am ON u.id = am.user_id
 		WHERE u.email = $1 AND am.role = 'OWNER'
 		LIMIT 1
-	`, req.Email).Scan(&userID, &passwordHash, &phone, &accountID)
+	`, req.Email).Scan(&userID, &passwordHash, &phone, &name, &avatarURL, &accountID)
 	if err != nil {
 		http.Error(w, "invalid credentials", http.StatusUnauthorized)
 		return
@@ -181,9 +197,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := models.User{
-		ID:    userID,
-		Email: req.Email,
-		Phone: phone,
+		ID:        userID,
+		Email:     req.Email,
+		Name:      name,
+		Phone:     phone,
+		AvatarURL: avatarURL,
 	}
 
 	json.NewEncoder(w).Encode(AuthResponse{
@@ -199,10 +217,10 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	var accounts []CurrentUserAccountAccess
 
 	err := h.db.QueryRow(r.Context(), `
-		SELECT id, email, phone, created_at
+		SELECT id, email, name, phone, avatar_url, created_at
 		FROM users
 		WHERE id = $1
-	`, userID).Scan(&user.ID, &user.Email, &user.Phone, &user.CreatedAt)
+	`, userID).Scan(&user.ID, &user.Email, &user.Name, &user.Phone, &user.AvatarURL, &user.CreatedAt)
 	if err != nil {
 		http.Error(w, "user not found", http.StatusNotFound)
 		return
@@ -229,13 +247,107 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := CurrentUserResponse{
-		ID:       user.ID,
-		Email:    user.Email,
-		Phone:    user.Phone,
-		Accounts: accounts,
+		ID:        user.ID,
+		Email:     user.Email,
+		Name:      user.Name,
+		Phone:     user.Phone,
+		AvatarURL: user.AvatarURL,
+		Accounts:  accounts,
 	}
 
 	json.NewEncoder(w).Encode(response)
+}
+
+func normalizeOptionalString(value *string) *string {
+	if value == nil {
+		return nil
+	}
+
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return nil
+	}
+
+	return &trimmed
+}
+
+func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	userID := GetUserID(r).(uuid.UUID)
+
+	var req UpdateProfileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+
+	name := normalizeOptionalString(req.Name)
+	phone := normalizeOptionalString(req.Phone)
+	avatarURL := normalizeOptionalString(req.AvatarURL)
+
+	var user models.User
+	err := h.db.QueryRow(r.Context(), `
+		UPDATE users
+		SET name = $2, phone = $3, avatar_url = $4
+		WHERE id = $1
+		RETURNING id, email, name, phone, avatar_url, created_at
+	`, userID, name, phone, avatarURL).Scan(&user.ID, &user.Email, &user.Name, &user.Phone, &user.AvatarURL, &user.CreatedAt)
+	if err != nil {
+		http.Error(w, "failed to update profile", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(user)
+}
+
+func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	userID := GetUserID(r).(uuid.UUID)
+
+	var req ChangePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if len(req.NewPassword) < 8 {
+		http.Error(w, "new password must be at least 8 characters", http.StatusBadRequest)
+		return
+	}
+
+	var currentHash string
+	err := h.db.QueryRow(r.Context(), `
+		SELECT password_hash
+		FROM users
+		WHERE id = $1
+	`, userID).Scan(&currentHash)
+	if err != nil {
+		http.Error(w, "user not found", http.StatusNotFound)
+		return
+	}
+
+	if !auth.CheckPasswordHash(req.CurrentPassword, currentHash) {
+		http.Error(w, "current password is incorrect", http.StatusUnauthorized)
+		return
+	}
+
+	nextHash, err := auth.HashPassword(req.NewPassword)
+	if err != nil {
+		http.Error(w, "failed to hash password", http.StatusInternalServerError)
+		return
+	}
+
+	_, err = h.db.Exec(r.Context(), `
+		UPDATE users
+		SET password_hash = $2
+		WHERE id = $1
+	`, userID, nextHash)
+	if err != nil {
+		http.Error(w, "failed to update password", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": "password_updated",
+	})
 }
 
 // ListUsers returns all users in the same account(s) as the current user
