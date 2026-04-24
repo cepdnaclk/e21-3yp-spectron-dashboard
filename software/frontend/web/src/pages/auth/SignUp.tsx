@@ -78,7 +78,7 @@ const SignUp: React.FC = () => {
         >
           <Box sx={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', bgcolor: 'rgba(108, 137, 48, 0.28)', right: -40, bottom: -60 }} />
           <Stack direction="row" spacing={1.5} alignItems="center" sx={{ position: 'relative' }}>
-            <Box sx={{ p: 1, borderRadius: 2, bgcolor: 'secondary.main' }}>
+            <Box sx={{ p: 1, borderRadius: '50%', bgcolor: 'secondary.main' }}>
               <Spa />
             </Box>
             <Typography variant="h5">Spectron</Typography>
@@ -95,7 +95,7 @@ const SignUp: React.FC = () => {
           </Stack>
         </Box>
 
-        <Paper elevation={0} sx={{ p: { xs: 3, md: 4 }, borderRadius: 2, border: '1px solid rgba(60, 57, 17, 0.1)', alignSelf: 'center' }}>
+        <Paper elevation={0} sx={{ p: { xs: 3, md: 4 }, borderRadius: 2, border: '1.5px solid rgba(60, 57, 17, 0.12)', alignSelf: 'center' }}>
           <Typography variant="h4" component="h1" gutterBottom>
             Create Account
           </Typography>

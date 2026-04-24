@@ -52,7 +52,7 @@ const theme = createTheme({
     },
   },
   shape: {
-    borderRadius: 8,
+    borderRadius: 10,
   },
   typography: {
     fontFamily:
@@ -87,8 +87,9 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           border: '1px solid rgba(60, 57, 17, 0.1)',
-          borderRadius: 8,
-          boxShadow: '0 18px 44px rgba(60, 57, 17, 0.08)',
+          borderRadius: 14,
+          boxShadow: 'none',
+          backgroundColor: 'transparent',
           backgroundImage: 'none',
         },
       },
@@ -97,27 +98,34 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           backgroundImage: 'none',
+          borderRadius: 16,
         },
       },
     },
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 8,
+          borderRadius: 16,
           minHeight: 44,
         },
+        contained: {
+          boxShadow: 'none',
+          '&:hover': {
+            boxShadow: 'none',
+          },
+        },
         containedPrimary: {
-          boxShadow: '0 14px 28px rgba(108, 137, 48, 0.24)',
+          boxShadow: 'none',
         },
         containedSecondary: {
-          boxShadow: '0 14px 28px rgba(235, 79, 18, 0.22)',
+          boxShadow: 'none',
         },
       },
     },
     MuiChip: {
       styleOverrides: {
         root: {
-          borderRadius: 8,
+          borderRadius: 999,
           fontWeight: 750,
         },
       },
@@ -162,7 +170,7 @@ const theme = createTheme({
     MuiOutlinedInput: {
       styleOverrides: {
         root: {
-          borderRadius: 8,
+          borderRadius: 16,
           backgroundColor: '#fffdf8',
         },
         input: {
@@ -171,7 +179,7 @@ const theme = createTheme({
             WebkitBoxShadow: '0 0 0 100px #fffdf8 inset',
             WebkitTextFillColor: '#262411',
             caretColor: '#262411',
-            borderRadius: 8,
+            borderRadius: 16,
             transition: 'background-color 9999s ease-out 0s',
           },
           '&:-webkit-autofill:hover': {
@@ -194,8 +202,16 @@ const theme = createTheme({
     MuiAlert: {
       styleOverrides: {
         root: {
-          borderRadius: 8,
-          border: '1px solid rgba(60, 57, 17, 0.1)',
+          borderRadius: 16,
+          border: '1.5px solid rgba(60, 57, 17, 0.12)',
+        },
+      },
+    },
+    MuiToggleButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 16,
+          textTransform: 'none',
         },
       },
     },

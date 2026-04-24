@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Container,
   Paper,
@@ -9,13 +9,16 @@ import {
   Box,
   Grid,
   FormControl,
+  IconButton,
   InputLabel,
   MenuItem,
   Select,
   Alert,
   Stack,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
-import { AutoAwesome, BatteryChargingFull, Tune } from '@mui/icons-material';
+import { ArrowBack, AutoAwesome, BatteryChargingFull, Tune } from '@mui/icons-material';
 import {
   getSensor,
   Sensor,
@@ -29,6 +32,7 @@ import { estimateBatteryLifeDays, getSensorMetrics } from '../../utils/sensorCon
 import { SensorConfigSkeleton } from '../../components/LoadingSkeletons';
 
 type MetricThresholdInput = {
+  mode: ThresholdMode;
   min: string;
   max: string;
   warningMin: string;
@@ -43,6 +47,11 @@ type MetricThresholdPayload = {
 };
 
 type SetupMode = 'manual' | 'ai_assisted';
+type ThresholdMode = 'min' | 'max' | 'range';
+type SensorConfigNavigationState = {
+  preferredSetupMode?: SetupMode;
+  returnTo?: string;
+};
 
 type AiDraftSummary = {
   explanation: string;
@@ -61,11 +70,53 @@ const toNumberOrUndefined = (value: string): number | undefined => {
 };
 
 const emptyMetricThresholdInput = (): MetricThresholdInput => ({
+  mode: 'range',
   min: '',
   max: '',
   warningMin: '',
   warningMax: '',
 });
+
+const inferThresholdMode = (thresholds?: Partial<MetricThresholdPayload>): ThresholdMode => {
+  const hasMin = thresholds?.min !== undefined;
+  const hasMax = thresholds?.max !== undefined;
+
+  if (hasMin && !hasMax) {
+    return 'min';
+  }
+  if (!hasMin && hasMax) {
+    return 'max';
+  }
+  return 'range';
+};
+
+const applyThresholdMode = (
+  current: MetricThresholdInput,
+  mode: ThresholdMode
+): MetricThresholdInput => {
+  if (mode === 'min') {
+    return {
+      ...current,
+      mode,
+      max: '',
+      warningMax: '',
+    };
+  }
+
+  if (mode === 'max') {
+    return {
+      ...current,
+      mode,
+      min: '',
+      warningMin: '',
+    };
+  }
+
+  return {
+    ...current,
+    mode,
+  };
+};
 
 const toPositiveIntOrUndefined = (value: string): number | undefined => {
   if (!value || value.trim() === '') {
@@ -83,6 +134,8 @@ const toPositiveIntOrUndefined = (value: string): number | undefined => {
 const SensorConfig: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const navigationState = (location.state || null) as SensorConfigNavigationState | null;
   const [sensor, setSensor] = useState<Sensor | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -117,6 +170,20 @@ const SensorConfig: React.FC = () => {
     readingFlowType
   );
 
+  const handleBack = () => {
+    if ((window.history.state?.idx ?? 0) > 0) {
+      navigate(-1);
+      return;
+    }
+
+    if (sensor?.controller_id) {
+      navigate(`/controllers/${sensor.controller_id}`);
+      return;
+    }
+
+    navigate('/controllers');
+  };
+
   useEffect(() => {
     if (sensorMetrics.length === 0) return;
 
@@ -139,7 +206,7 @@ const SensorConfig: React.FC = () => {
 
       if (initializedSensorIdRef.current !== id) {
         setPurpose(sensorData.purpose || '');
-        setFriendlyName(sensorData.name || '');
+        setFriendlyName(sensorData.active_config?.friendly_name || sensorData.name || '');
         setDomain(sensorData.context?.domain || '');
         setEnvironmentType(sensorData.context?.environment_type || '');
         setIndoorOutdoor(sensorData.context?.indoor_outdoor || '');
@@ -149,7 +216,28 @@ const SensorConfig: React.FC = () => {
         setLocationLabel(sensorData.context?.location?.label || '');
         setHistoricalWindowDays(sensorData.context?.historical_window_days?.toString() || '14');
         setInstallationNotes(sensorData.context?.installation_notes || '');
-        setSetupMode(sensorData.purpose ? 'ai_assisted' : 'manual');
+        setReportsPerDay(sensorData.active_config?.report_interval_per_day?.toString() || '24');
+
+        const nextMetricThresholds: Record<string, MetricThresholdInput> = {};
+        const metrics = getSensorMetrics(sensorData.type || '');
+        for (const metric of metrics) {
+          const metricConfig =
+            sensorData.active_config?.metric_thresholds?.[metric.key] ||
+            (metrics.length === 1 ? sensorData.active_config?.thresholds : undefined);
+
+          nextMetricThresholds[metric.key] = {
+            mode: inferThresholdMode(metricConfig),
+            min: metricConfig?.min?.toString() || '',
+            max: metricConfig?.max?.toString() || '',
+            warningMin: metricConfig?.warning_min?.toString() || '',
+            warningMax: metricConfig?.warning_max?.toString() || '',
+          };
+        }
+        if (metrics.length > 0) {
+          setMetricThresholds(nextMetricThresholds);
+        }
+
+        setSetupMode(navigationState?.preferredSetupMode || (sensorData.purpose ? 'ai_assisted' : 'manual'));
         initializedSensorIdRef.current = id;
       }
     } catch (error) {
@@ -158,7 +246,7 @@ const SensorConfig: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, navigationState?.preferredSetupMode]);
 
   useEffect(() => {
     initializedSensorIdRef.current = null;
@@ -239,6 +327,7 @@ const SensorConfig: React.FC = () => {
           config.metric_thresholds?.[metric.key] ||
           (sensorMetrics.length === 1 ? config.thresholds : undefined);
         nextMetricThresholds[metric.key] = {
+          mode: inferThresholdMode(metricConfig),
           min: metricConfig?.min?.toString() || '',
           max: metricConfig?.max?.toString() || '',
           warningMin: metricConfig?.warning_min?.toString() || '',
@@ -309,17 +398,32 @@ const SensorConfig: React.FC = () => {
         config,
       });
 
+      const successState = {
+        configurationSaved: true,
+        configuredSensorId: sensor.id,
+        configuredSensorName: response.validated_config.friendly_name,
+        validationWarnings: response.warnings || [],
+        observationMessage:
+          response.observation?.message ||
+          'The system is now observing live readings and can suggest refinements later.',
+      };
+
+      if (navigationState?.returnTo) {
+        navigate(navigationState.returnTo, {
+          replace: true,
+          state: successState,
+        });
+        return;
+      }
+
+      if ((window.history.state?.idx ?? 0) > 0) {
+        navigate(-1);
+        return;
+      }
+
       navigate(`/controllers/${sensor.controller_id}`, {
         replace: true,
-        state: {
-          configurationSaved: true,
-          configuredSensorId: sensor.id,
-          configuredSensorName: response.validated_config.friendly_name,
-          validationWarnings: response.warnings || [],
-          observationMessage:
-            response.observation?.message ||
-            'The system is now observing live readings and can suggest refinements later.',
-        },
+        state: successState,
       });
     } catch (error: any) {
       setPageError(error.response?.data?.message || 'Failed to save configuration.');
@@ -350,6 +454,33 @@ const SensorConfig: React.FC = () => {
   return (
     <Container maxWidth="xl" sx={{ py: { xs: 2, md: 3 } }}>
       <Paper elevation={0} sx={{ p: { xs: 2.5, md: 3.5 }, borderRadius: 2, border: '1px solid rgba(60, 57, 17, 0.1)' }}>
+        <Box
+          sx={{
+            position: 'sticky',
+            top: { xs: 12, md: 20 },
+            zIndex: 5,
+            display: 'flex',
+            justifyContent: 'flex-start',
+            mb: 1.5,
+            pointerEvents: 'none',
+          }}
+        >
+          <IconButton
+            aria-label="Go back"
+            onClick={handleBack}
+            sx={{
+              pointerEvents: 'auto',
+              border: '1px solid rgba(60, 57, 17, 0.12)',
+              bgcolor: '#fffdf8',
+              boxShadow: '0 12px 24px rgba(60, 57, 17, 0.08)',
+              '&:hover': {
+                bgcolor: '#fff8ed',
+              },
+            }}
+          >
+            <ArrowBack />
+          </IconButton>
+        </Box>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} sx={{ mb: 2 }}>
           <Box>
             <Typography variant="overline" color="secondary" fontWeight={800}>
@@ -359,7 +490,7 @@ const SensorConfig: React.FC = () => {
               Configure {sensor.type} Sensor
             </Typography>
           </Box>
-          <Box sx={{ p: 1.4, borderRadius: 2, bgcolor: 'rgba(108, 137, 48, 0.12)' }}>
+          <Box sx={{ p: 1.4, borderRadius: '50%', bgcolor: 'rgba(108, 137, 48, 0.12)' }}>
             <Tune color="primary" />
           </Box>
         </Stack>
@@ -401,7 +532,7 @@ const SensorConfig: React.FC = () => {
           </Alert>
         )}
 
-        <Box sx={{ mt: 3 }}>
+        <Box sx={{ mt: 3, pt: 3, borderTop: '1px solid rgba(60, 57, 17, 0.08)' }}>
           <Typography variant="subtitle1" gutterBottom>
             Setup Mode
           </Typography>
@@ -434,7 +565,7 @@ const SensorConfig: React.FC = () => {
         </Box>
 
         {isAiAssisted && (
-          <Box sx={{ mt: 3 }}>
+          <Box sx={{ mt: 3, pt: 3, borderTop: '1px solid rgba(60, 57, 17, 0.08)' }}>
             <Typography variant="subtitle1" gutterBottom>
               Context
             </Typography>
@@ -558,7 +689,7 @@ const SensorConfig: React.FC = () => {
         )}
 
         {setupMode === 'ai_assisted' && (
-          <Box sx={{ mt: 3 }}>
+          <Box sx={{ mt: 3, pt: 3, borderTop: '1px solid rgba(60, 57, 17, 0.08)' }}>
           <Typography variant="subtitle1" gutterBottom>
             AI Support
           </Typography>
@@ -616,7 +747,7 @@ const SensorConfig: React.FC = () => {
           </Box>
         )}
 
-        <Box sx={{ mt: 4 }}>
+        <Box sx={{ mt: 4, pt: 3, borderTop: '1px solid rgba(60, 57, 17, 0.08)' }}>
           <Typography variant="subtitle1" gutterBottom>
             Configuration
           </Typography>
@@ -635,81 +766,115 @@ const SensorConfig: React.FC = () => {
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
                 {metric.label} Thresholds
               </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                Choose whether this sensor should enforce a lower limit, an upper limit, or both.
+              </Typography>
+              <ToggleButtonGroup
+                exclusive
+                size="small"
+                color="primary"
+                value={metricThresholds[metric.key]?.mode || 'range'}
+                onChange={(_, nextMode: ThresholdMode | null) => {
+                  if (!nextMode) {
+                    return;
+                  }
+                  setMetricThresholds((current) => ({
+                    ...current,
+                    [metric.key]: applyThresholdMode(
+                      current[metric.key] || emptyMetricThresholdInput(),
+                      nextMode
+                    ),
+                  }));
+                }}
+                sx={{ mb: 2, flexWrap: 'wrap' }}
+              >
+                <ToggleButton value="min">Only Min</ToggleButton>
+                <ToggleButton value="max">Only Max</ToggleButton>
+                <ToggleButton value="range">Min + Max</ToggleButton>
+              </ToggleButtonGroup>
               <Grid container spacing={2}>
-                <Grid item xs={6}>
-                  <TextField
-                    fullWidth
-                    label="Min Value"
-                    type="number"
-                    value={metricThresholds[metric.key]?.min || ''}
-                    onChange={(e) =>
-                      setMetricThresholds((current) => ({
-                        ...current,
-                        [metric.key]: {
-                          ...(current[metric.key] || emptyMetricThresholdInput()),
-                          min: e.target.value,
-                        },
-                      }))
-                    }
-                  />
-                </Grid>
-                <Grid item xs={6}>
-                  <TextField
-                    fullWidth
-                    label="Max Value"
-                    type="number"
-                    value={metricThresholds[metric.key]?.max || ''}
-                    onChange={(e) =>
-                      setMetricThresholds((current) => ({
-                        ...current,
-                        [metric.key]: {
-                          ...(current[metric.key] || emptyMetricThresholdInput()),
-                          max: e.target.value,
-                        },
-                      }))
-                    }
-                  />
-                </Grid>
+                {metricThresholds[metric.key]?.mode !== 'max' && (
+                  <Grid item xs={12} md={metricThresholds[metric.key]?.mode === 'range' ? 6 : 12}>
+                    <TextField
+                      fullWidth
+                      label="Min Value"
+                      type="number"
+                      value={metricThresholds[metric.key]?.min || ''}
+                      onChange={(e) =>
+                        setMetricThresholds((current) => ({
+                          ...current,
+                          [metric.key]: {
+                            ...(current[metric.key] || emptyMetricThresholdInput()),
+                            min: e.target.value,
+                          },
+                        }))
+                      }
+                    />
+                  </Grid>
+                )}
+                {metricThresholds[metric.key]?.mode !== 'min' && (
+                  <Grid item xs={12} md={metricThresholds[metric.key]?.mode === 'range' ? 6 : 12}>
+                    <TextField
+                      fullWidth
+                      label="Max Value"
+                      type="number"
+                      value={metricThresholds[metric.key]?.max || ''}
+                      onChange={(e) =>
+                        setMetricThresholds((current) => ({
+                          ...current,
+                          [metric.key]: {
+                            ...(current[metric.key] || emptyMetricThresholdInput()),
+                            max: e.target.value,
+                          },
+                        }))
+                      }
+                    />
+                  </Grid>
+                )}
               </Grid>
 
               <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
                 {metric.label} Warning Thresholds (Optional)
               </Typography>
               <Grid container spacing={2}>
-                <Grid item xs={6}>
-                  <TextField
-                    fullWidth
-                    label="Warning Min"
-                    type="number"
-                    value={metricThresholds[metric.key]?.warningMin || ''}
-                    onChange={(e) =>
-                      setMetricThresholds((current) => ({
-                        ...current,
-                        [metric.key]: {
-                          ...(current[metric.key] || emptyMetricThresholdInput()),
-                          warningMin: e.target.value,
-                        },
-                      }))
-                    }
-                  />
-                </Grid>
-                <Grid item xs={6}>
-                  <TextField
-                    fullWidth
-                    label="Warning Max"
-                    type="number"
-                    value={metricThresholds[metric.key]?.warningMax || ''}
-                    onChange={(e) =>
-                      setMetricThresholds((current) => ({
-                        ...current,
-                        [metric.key]: {
-                          ...(current[metric.key] || emptyMetricThresholdInput()),
-                          warningMax: e.target.value,
-                        },
-                      }))
-                    }
-                  />
-                </Grid>
+                {metricThresholds[metric.key]?.mode !== 'max' && (
+                  <Grid item xs={12} md={metricThresholds[metric.key]?.mode === 'range' ? 6 : 12}>
+                    <TextField
+                      fullWidth
+                      label="Warning Min"
+                      type="number"
+                      value={metricThresholds[metric.key]?.warningMin || ''}
+                      onChange={(e) =>
+                        setMetricThresholds((current) => ({
+                          ...current,
+                          [metric.key]: {
+                            ...(current[metric.key] || emptyMetricThresholdInput()),
+                            warningMin: e.target.value,
+                          },
+                        }))
+                      }
+                    />
+                  </Grid>
+                )}
+                {metricThresholds[metric.key]?.mode !== 'min' && (
+                  <Grid item xs={12} md={metricThresholds[metric.key]?.mode === 'range' ? 6 : 12}>
+                    <TextField
+                      fullWidth
+                      label="Warning Max"
+                      type="number"
+                      value={metricThresholds[metric.key]?.warningMax || ''}
+                      onChange={(e) =>
+                        setMetricThresholds((current) => ({
+                          ...current,
+                          [metric.key]: {
+                            ...(current[metric.key] || emptyMetricThresholdInput()),
+                            warningMax: e.target.value,
+                          },
+                        }))
+                      }
+                    />
+                  </Grid>
+                )}
               </Grid>
             </Box>
           ))}

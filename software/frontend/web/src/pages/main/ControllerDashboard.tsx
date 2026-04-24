@@ -11,8 +11,9 @@ import {
   Grid,
   Alert,
   Stack,
+  IconButton,
 } from '@mui/material';
-import { Settings, DeviceThermostat, Place, Memory, Tune } from '@mui/icons-material';
+import { ArrowBack, Settings, DeviceThermostat, Place, Memory, Tune } from '@mui/icons-material';
 import { getController, Controller } from '../../services/controllerService';
 import { getSensors, Sensor } from '../../services/sensorService';
 import { ControllerDashboardSkeleton } from '../../components/LoadingSkeletons';
@@ -34,6 +35,15 @@ const ControllerDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const navigationState = (location.state || null) as DashboardNavigationState | null;
   const [saveNotice, setSaveNotice] = useState<DashboardNavigationState | null>(navigationState);
+
+  const handleBack = () => {
+    if ((window.history.state?.idx ?? 0) > 0) {
+      navigate(-1);
+      return;
+    }
+
+    navigate('/controllers');
+  };
 
   const loadData = useCallback(async () => {
     if (!id) return;
@@ -116,6 +126,33 @@ const ControllerDashboard: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ py: { xs: 2, md: 3 } }}>
+      <Box
+        sx={{
+          position: 'sticky',
+          top: { xs: 12, md: 20 },
+          zIndex: 5,
+          display: 'flex',
+          justifyContent: 'flex-start',
+          mb: 1.5,
+          pointerEvents: 'none',
+        }}
+      >
+        <IconButton
+          aria-label="Go back"
+          onClick={handleBack}
+          sx={{
+            pointerEvents: 'auto',
+            border: '1px solid rgba(60, 57, 17, 0.12)',
+            bgcolor: '#fffdf8',
+            boxShadow: '0 12px 24px rgba(60, 57, 17, 0.08)',
+            '&:hover': {
+              bgcolor: '#fff8ed',
+            },
+          }}
+        >
+          <ArrowBack />
+        </IconButton>
+      </Box>
       {saveNotice?.configurationSaved && (
         <Alert
           severity={(saveNotice.validationWarnings || []).length > 0 ? 'warning' : 'success'}
@@ -139,7 +176,15 @@ const ControllerDashboard: React.FC = () => {
         </Alert>
       )}
 
-      <Card sx={{ mb: 3, bgcolor: '#3c3911', color: '#fffdf8' }}>
+      <Card
+        sx={{
+          mb: 3,
+          bgcolor: '#3c3911',
+          color: '#fffdf8',
+          border: '1px solid rgba(255, 253, 248, 0.08)',
+          boxShadow: 'none',
+        }}
+      >
         <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
           <Box display="flex" justifyContent="space-between" alignItems="flex-start" gap={2} mb={2}>
             <Box>
@@ -203,9 +248,9 @@ const ControllerDashboard: React.FC = () => {
                   sx={
                     saveNotice?.configuredSensorId === sensor.id
                       ? {
-                          border: '1px solid',
+                          border: '1.5px solid',
                           borderColor: 'success.main',
-                          boxShadow: '0 22px 48px rgba(108, 137, 48, 0.14)',
+                          boxShadow: 'none',
                         }
                       : undefined
                   }
@@ -213,7 +258,7 @@ const ControllerDashboard: React.FC = () => {
                   <CardContent sx={{ p: 2.5 }}>
                     <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
                       <Box display="flex" alignItems="center" gap={1}>
-                        <Box sx={{ p: 1, borderRadius: 2, bgcolor: 'rgba(108, 137, 48, 0.12)' }}>
+                        <Box sx={{ p: 1, borderRadius: '50%', bgcolor: 'rgba(108, 137, 48, 0.12)' }}>
                           <DeviceThermostat color="primary" />
                         </Box>
                         <Typography variant="h6">
@@ -243,32 +288,34 @@ const ControllerDashboard: React.FC = () => {
                         />
                       )}
                     </Stack>
-                    {sensor.purpose ? (
-                      <Typography variant="body2" color="text.secondary">
-                        {sensor.purpose}
-                      </Typography>
-                    ) : sensor.config_active ? (
-                      <Typography variant="body2" color="text.secondary" fontStyle="italic">
-                        {sensor.observation?.message || 'Configured and collecting live readings for later review.'}
-                      </Typography>
-                    ) : sensor.status === 'OK' ? (
-                      <Typography variant="body2" color="text.secondary" fontStyle="italic">
-                        Sensor is discovered and can show readings now. Configuration can be added later.
-                      </Typography>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary" fontStyle="italic">
-                        Sensor discovered. Send a reading packet from the controller to confirm live data.
-                      </Typography>
-                    )}
-                    <Button
-                      variant="outlined"
-                      startIcon={sensor.config_active ? <Tune /> : <Settings />}
-                      size="small"
-                      sx={{ mt: 2 }}
-                      onClick={() => navigate(`/sensors/${sensor.id}/config`)}
-                    >
-                      {sensor.config_active ? 'Review Configuration' : 'Configure Later'}
-                    </Button>
+                    <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid rgba(60, 57, 17, 0.08)' }}>
+                      {sensor.purpose ? (
+                        <Typography variant="body2" color="text.secondary">
+                          {sensor.purpose}
+                        </Typography>
+                      ) : sensor.config_active ? (
+                        <Typography variant="body2" color="text.secondary" fontStyle="italic">
+                          {sensor.observation?.message || 'Configured and collecting live readings for later review.'}
+                        </Typography>
+                      ) : sensor.status === 'OK' ? (
+                        <Typography variant="body2" color="text.secondary" fontStyle="italic">
+                          Sensor is discovered and can show readings now. Configuration can be added later.
+                        </Typography>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary" fontStyle="italic">
+                          Sensor discovered. Send a reading packet from the controller to confirm live data.
+                        </Typography>
+                      )}
+                      <Button
+                        variant="outlined"
+                        startIcon={sensor.config_active ? <Tune /> : <Settings />}
+                        size="small"
+                        sx={{ mt: 2 }}
+                        onClick={() => navigate(`/sensors/${sensor.id}/config`)}
+                      >
+                        {sensor.config_active ? 'Review Configuration' : 'Configure Later'}
+                      </Button>
+                    </Box>
                   </CardContent>
                 </Card>
               </Grid>

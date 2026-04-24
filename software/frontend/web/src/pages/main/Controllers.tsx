@@ -64,6 +64,7 @@ const Controllers: React.FC = () => {
           color: '#fffdf8',
           overflow: 'hidden',
           position: 'relative',
+          border: '1px solid rgba(255, 253, 248, 0.08)',
         }}
       >
         <Box
@@ -124,10 +125,9 @@ const Controllers: React.FC = () => {
                 sx={{
                   cursor: 'pointer',
                   height: '100%',
-                  transition: 'transform 180ms ease, box-shadow 180ms ease',
+                  transition: 'border-color 180ms ease',
                   '&:hover': {
-                    transform: 'translateY(-4px)',
-                    boxShadow: '0 24px 52px rgba(60, 57, 17, 0.13)',
+                    borderColor: 'rgba(60, 57, 17, 0.18)',
                   },
                 }}
                 onClick={() => navigate(`/controllers/${controller.id}`)}
@@ -135,7 +135,7 @@ const Controllers: React.FC = () => {
                 <CardContent sx={{ p: 2.5 }}>
                   <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
                     <Box display="flex" alignItems="center" gap={1.5}>
-                      <Box sx={{ p: 1, borderRadius: 2, bgcolor: 'rgba(108, 137, 48, 0.12)' }}>
+                      <Box sx={{ p: 1, borderRadius: '50%', bgcolor: 'rgba(108, 137, 48, 0.12)' }}>
                         <ChipIcon color="primary" />
                       </Box>
                       <Typography variant="h6">
@@ -153,7 +153,7 @@ const Controllers: React.FC = () => {
                       {controller.purpose}
                     </Typography>
                   )}
-                  <Stack spacing={1.2} sx={{ mt: 2 }}>
+                  <Stack spacing={1.2} sx={{ mt: 2, pt: 2, borderTop: '1px solid rgba(60, 57, 17, 0.08)' }}>
                     {controller.location && (
                       <Stack direction="row" spacing={1} alignItems="center">
                         <Place color="secondary" fontSize="small" />
