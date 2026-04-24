@@ -231,7 +231,7 @@ func (h *SensorHandler) AISuggestConfig(w http.ResponseWriter, r *http.Request) 
 		explanation = fmt.Sprintf("Configuration suggested by local fallback logic (%v).", hostedErr)
 	}
 
-	validation := validateAndFinalizeConfig(metadata.SensorType, mergedContext, suggestedConfig, metadata.ControllerCapability, metadata.CalibrationStatus)
+	validation := validateAndFinalizeConfig(metadata.SensorType, req.Purpose, mergedContext, suggestedConfig, metadata.ControllerCapability, metadata.CalibrationStatus)
 	if validation.ValidationStatus == "adjusted" {
 		explanation = strings.TrimSpace(explanation + " The backend safety validator adjusted one or more values before returning the final recommendation.")
 	}
@@ -274,6 +274,9 @@ type geminiGenerateResponse struct {
 
 type hostedAISuggestion struct {
 	FriendlyName         string                            `json:"friendly_name"`
+	UseCase              string                            `json:"use_case"`
+	PresentationProfile  string                            `json:"presentation_profile"`
+	PrimaryMetric        string                            `json:"primary_metric"`
 	ReportIntervalPerDay int                               `json:"report_interval_per_day"`
 	Thresholds           models.ThresholdConfig            `json:"thresholds"`
 	MetricThresholds     map[string]models.ThresholdConfig `json:"metric_thresholds"`
@@ -310,6 +313,9 @@ Historical summary: %s
 Rules:
 - Return strict JSON object with keys:
   friendly_name (string),
+  use_case (string, optional),
+  presentation_profile (string, optional),
+  primary_metric (string, optional),
   report_interval_per_day (integer 1-144),
   thresholds (object with optional min,max,warning_min,warning_max numbers),
   metric_thresholds (object map where each key has same threshold shape),
@@ -431,6 +437,9 @@ Rules:
 
 	config := models.SensorConfig{
 		FriendlyName:         suggestion.FriendlyName,
+		UseCase:              strings.TrimSpace(suggestion.UseCase),
+		PresentationProfile:  strings.TrimSpace(suggestion.PresentationProfile),
+		PrimaryMetric:        strings.TrimSpace(suggestion.PrimaryMetric),
 		Thresholds:           thresholds,
 		MetricThresholds:     metricThresholds,
 		ReportIntervalPerDay: suggestion.ReportIntervalPerDay,
@@ -616,6 +625,14 @@ func (h *SensorHandler) generateAISuggestion(sensorType string, req models.AISug
 	}
 
 	primaryMetric, specs, _ := metricSpecsForSensor(sensorType, req.Context)
+	useCase, presentationProfile, normalizedPrimaryMetric, _ := inferUseCaseAndProfile(
+		sensorType,
+		req.Purpose,
+		req.Context,
+		"",
+		"",
+		primaryMetric,
+	)
 	metricThresholds := map[string]models.ThresholdConfig{}
 	for key, spec := range specs {
 		metricThresholds[key] = cloneThreshold(spec.Default)
@@ -628,6 +645,9 @@ func (h *SensorHandler) generateAISuggestion(sensorType string, req models.AISug
 
 	return models.SensorConfig{
 		FriendlyName:         friendlyName,
+		UseCase:              useCase,
+		PresentationProfile:  presentationProfile,
+		PrimaryMetric:        normalizedPrimaryMetric,
 		Thresholds:           thresholds,
 		MetricThresholds:     metricThresholds,
 		ReportIntervalPerDay: reportsPerDay,
@@ -693,7 +713,7 @@ func (h *SensorHandler) SaveConfig(w http.ResponseWriter, r *http.Request) {
 		purposeToStore = strings.TrimSpace(metadata.StoredPurpose)
 	}
 
-	validation := validateAndFinalizeConfig(metadata.SensorType, contextToStore, *saveReq.Config, metadata.ControllerCapability, metadata.CalibrationStatus)
+	validation := validateAndFinalizeConfig(metadata.SensorType, purposeToStore, contextToStore, *saveReq.Config, metadata.ControllerCapability, metadata.CalibrationStatus)
 	configJSON, err := json.Marshal(validation.FinalConfig)
 	if err != nil {
 		http.Error(w, "failed to marshal config", http.StatusInternalServerError)

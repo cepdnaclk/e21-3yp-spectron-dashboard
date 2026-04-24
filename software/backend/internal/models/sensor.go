@@ -37,6 +37,9 @@ type SensorObservation struct {
 
 type SensorConfig struct {
 	FriendlyName         string                     `json:"friendly_name"`
+	UseCase              string                     `json:"use_case,omitempty"`
+	PresentationProfile  string                     `json:"presentation_profile,omitempty"`
+	PrimaryMetric        string                     `json:"primary_metric,omitempty"`
 	Thresholds           ThresholdConfig            `json:"thresholds"`
 	MetricThresholds     map[string]ThresholdConfig `json:"metric_thresholds,omitempty"`
 	ReportIntervalPerDay int                        `json:"report_interval_per_day"`

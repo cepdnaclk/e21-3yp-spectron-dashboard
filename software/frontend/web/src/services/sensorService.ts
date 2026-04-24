@@ -41,6 +41,9 @@ export interface SensorReading {
 
 export interface SensorConfig {
   friendly_name: string;
+  use_case?: string;
+  presentation_profile?: string;
+  primary_metric?: string;
   thresholds: {
     min?: number;
     max?: number;

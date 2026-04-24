@@ -31,6 +31,9 @@ import {
 import {
   Area,
   AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -70,6 +73,8 @@ type SensorCardData = {
   healthLabel: string;
   insight: string;
   threshold?: ThresholdRange;
+  presentationProfile: string;
+  useCase: string;
 };
 
 type ControllerMonitoringGroup = {
@@ -144,6 +149,95 @@ const getPrimaryThreshold = (sensor: Sensor): ThresholdRange | undefined => {
   return config.thresholds;
 };
 
+const getPresentationProfile = (sensor: Sensor) => {
+  const savedProfile = sensor.active_config?.presentation_profile?.trim();
+  if (savedProfile) {
+    return savedProfile;
+  }
+
+  switch (sensor.type.toLowerCase()) {
+    case 'ultrasonic':
+      return 'level_monitoring';
+    case 'load':
+    case 'load_cell':
+    case 'gas_sensor':
+    case 'air_quality':
+      return 'gauge_status';
+    default:
+      return 'single_trend';
+  }
+};
+
+const getUseCase = (sensor: Sensor) => {
+  const savedUseCase = sensor.active_config?.use_case?.trim();
+  if (savedUseCase) {
+    return savedUseCase;
+  }
+
+  switch (sensor.type.toLowerCase()) {
+    case 'temperature':
+    case 'humidity':
+    case 'temperature_humidity':
+    case 'temp_humidity':
+    case 'dht11':
+    case 'dht22':
+      return 'climate_monitoring';
+    case 'ultrasonic':
+      return 'fill_level_monitoring';
+    case 'load':
+    case 'load_cell':
+      return 'load_monitoring';
+    case 'gas_sensor':
+    case 'air_quality':
+      return 'safety_monitoring';
+    default:
+      return 'generic_monitoring';
+  }
+};
+
+const formatUseCaseLabel = (value: string) =>
+  value
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
+const getProfileBadgeLabel = (profile: string) => {
+  switch (profile) {
+    case 'dual_climate':
+      return 'Climate View';
+    case 'level_monitoring':
+      return 'Level View';
+    case 'counter_status':
+      return 'Status View';
+    case 'gauge_status':
+      return 'Gauge View';
+    case 'event_timeline':
+      return 'Timeline View';
+    default:
+      return 'Trend View';
+  }
+};
+
+const getVisualizationMode = (useCase: string, profile: string, sensorType: string) => {
+  if (profile === 'level_monitoring' || profile === 'gauge_status') {
+    return 'gauge';
+  }
+  if (profile === 'counter_status' || useCase === 'occupancy_monitoring' || useCase === 'attendance_monitoring') {
+    return 'bar';
+  }
+  if (profile === 'event_timeline') {
+    return 'timeline';
+  }
+  if (
+    profile === 'dual_climate' ||
+    useCase === 'climate_monitoring' ||
+    sensorType.toLowerCase() === 'humidity'
+  ) {
+    return 'area';
+  }
+  return 'line';
+};
+
 const getSensorIcon = (sensorType: string) => {
   switch (sensorType.toLowerCase()) {
     case 'temperature':
@@ -151,6 +245,8 @@ const getSensorIcon = (sensorType: string) => {
     case 'humidity':
       return WaterDrop;
     case 'ultrasonic':
+    case 'load':
+    case 'load_cell':
       return Straighten;
     default:
       return Sensors;
@@ -165,8 +261,31 @@ const getSensorUnit = (sensor: Sensor) => {
         ? '%RH'
         : sensor.type === 'ultrasonic'
           ? 'cm'
+          : sensor.type === 'load' || sensor.type === 'load_cell'
+            ? 'kg'
           : ''
   );
+};
+
+const getGaugeValue = (
+  latestValue: number | null,
+  threshold?: ThresholdRange,
+  trend: SensorPoint[] = []
+) => {
+  if (latestValue === null) {
+    return 0;
+  }
+
+  const maxReference =
+    threshold?.warning_max ??
+    threshold?.max ??
+    Math.max(...trend.map((point) => point.value), latestValue, 1);
+
+  if (!Number.isFinite(maxReference) || maxReference <= 0) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(100, (latestValue / maxReference) * 100));
 };
 
 const formatSensorValue = (value: number | null, unit?: string) => {
@@ -297,27 +416,6 @@ const getTrendDelta = (trend: SensorPoint[]) => {
   return `24h change -${Math.abs(delta).toFixed(1)}`;
 };
 
-const buildUltrasonicGaugeValue = (
-  latestValue: number | null,
-  threshold?: ThresholdRange,
-  trend: SensorPoint[] = []
-) => {
-  if (latestValue === null) {
-    return 0;
-  }
-
-  const maxReference =
-    threshold?.warning_max ??
-    threshold?.max ??
-    Math.max(...trend.map((point) => point.value), latestValue, 1);
-
-  if (!Number.isFinite(maxReference) || maxReference <= 0) {
-    return 0;
-  }
-
-  return Math.max(0, Math.min(100, (latestValue / maxReference) * 100));
-};
-
 const Monitoring: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -372,6 +470,8 @@ const Monitoring: React.FC = () => {
               const latestPoint = trend[trend.length - 1];
               const threshold = getPrimaryThreshold(sensor);
               const evaluated = evaluateHealth(sensor, latestPoint?.value ?? null, threshold);
+              const presentationProfile = getPresentationProfile(sensor);
+              const useCase = getUseCase(sensor);
 
               return {
                 controllerName: controller.name || controller.hw_id || 'Controller',
@@ -385,6 +485,8 @@ const Monitoring: React.FC = () => {
                 health: evaluated.health,
                 healthLabel: evaluated.label,
                 insight: evaluated.insight,
+                presentationProfile,
+                useCase,
               } satisfies SensorCardData;
             })
           );
@@ -630,6 +732,21 @@ const Monitoring: React.FC = () => {
                         ? 'Thresholds active'
                         : 'Thresholds not configured';
 
+                    const visualizationMode = getVisualizationMode(
+                      item.useCase,
+                      item.presentationProfile,
+                      item.sensor.type
+                    );
+                    const usesGauge = visualizationMode === 'gauge';
+                    const chartTitle =
+                      item.presentationProfile === 'counter_status'
+                        ? 'Recent activity'
+                        : item.presentationProfile === 'event_timeline'
+                          ? 'Recent events'
+                          : usesGauge
+                            ? 'Status snapshot'
+                            : 'Recent trend';
+
                     return (
                       <Grid item xs={12} lg={6} key={item.sensor.id}>
                         <Card
@@ -734,7 +851,7 @@ const Monitoring: React.FC = () => {
                                 <Chip
                                   size="small"
                                   variant="outlined"
-                                  label={`${item.sensor.type.replace(/_/g, ' ')} sensor`}
+                                  label={getProfileBadgeLabel(item.presentationProfile)}
                                   sx={{ alignSelf: 'flex-start' }}
                                 />
                                 <Typography variant="caption" color="text.secondary">
@@ -746,13 +863,13 @@ const Monitoring: React.FC = () => {
 
                             <Divider sx={{ my: 2 }} />
 
-                            {item.sensor.type === 'ultrasonic' ? (
+                            {usesGauge ? (
                               <Box>
                                 <Stack direction="row" justifyContent="space-between" sx={{ mb: 1 }}>
-                                  <Typography variant="subtitle2">Level Snapshot</Typography>
+                                  <Typography variant="subtitle2">{chartTitle}</Typography>
                                   <Typography variant="body2" color="text.secondary">
                                     {Math.round(
-                                      buildUltrasonicGaugeValue(
+                                      getGaugeValue(
                                         item.latestValue,
                                         item.threshold,
                                         item.trend
@@ -763,7 +880,7 @@ const Monitoring: React.FC = () => {
                                 </Stack>
                                 <LinearProgress
                                   variant="determinate"
-                                  value={buildUltrasonicGaugeValue(
+                                  value={getGaugeValue(
                                     item.latestValue,
                                     item.threshold,
                                     item.trend
@@ -781,8 +898,19 @@ const Monitoring: React.FC = () => {
                               </Box>
                             ) : (
                               <Box sx={{ width: '100%', height: 160 }}>
+                                <Stack
+                                  direction="row"
+                                  justifyContent="space-between"
+                                  alignItems="center"
+                                  sx={{ mb: 1 }}
+                                >
+                                  <Typography variant="subtitle2">{chartTitle}</Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {formatUseCaseLabel(item.useCase)}
+                                  </Typography>
+                                </Stack>
                                 <ResponsiveContainer>
-                                  {item.sensor.type === 'humidity' ? (
+                                  {visualizationMode === 'area' ? (
                                     <AreaChart data={item.trend}>
                                       <defs>
                                         <linearGradient
@@ -824,6 +952,67 @@ const Monitoring: React.FC = () => {
                                         fill={`url(#humidity-fill-${item.sensor.id})`}
                                       />
                                     </AreaChart>
+                                  ) : visualizationMode === 'bar' ? (
+                                    <BarChart data={item.trend}>
+                                      <CartesianGrid vertical={false} strokeDasharray="3 3" stroke={alpha(styles.accent, 0.12)} />
+                                      <XAxis
+                                        dataKey="shortLabel"
+                                        tickLine={false}
+                                        axisLine={false}
+                                        interval={0}
+                                        tick={{ fontSize: 11, fill: '#6a624f' }}
+                                        tickFormatter={(value, index) =>
+                                          shouldRenderTick(index, item.trend.length) ? value : ''
+                                        }
+                                        minTickGap={24}
+                                      />
+                                      <YAxis
+                                        width={32}
+                                        domain={['auto', 'auto']}
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fontSize: 11, fill: '#8a806d' }}
+                                        tickFormatter={formatYAxisTick}
+                                      />
+                                      <Tooltip />
+                                      <Bar
+                                        dataKey="value"
+                                        fill={alpha(styles.accent, 0.78)}
+                                        radius={[6, 6, 0, 0]}
+                                      />
+                                    </BarChart>
+                                  ) : visualizationMode === 'timeline' ? (
+                                    <LineChart data={item.trend}>
+                                      <CartesianGrid vertical={false} strokeDasharray="4 4" stroke={alpha(styles.accent, 0.16)} />
+                                      <XAxis
+                                        dataKey="shortLabel"
+                                        tickLine={false}
+                                        axisLine={false}
+                                        interval={0}
+                                        tick={{ fontSize: 11, fill: '#6a624f' }}
+                                        tickFormatter={(value, index) =>
+                                          shouldRenderTick(index, item.trend.length) ? value : ''
+                                        }
+                                        minTickGap={24}
+                                      />
+                                      <YAxis
+                                        width={32}
+                                        domain={['auto', 'auto']}
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fontSize: 11, fill: '#8a806d' }}
+                                        tickFormatter={formatYAxisTick}
+                                      />
+                                      <Tooltip />
+                                      <Line
+                                        type="stepAfter"
+                                        dataKey="value"
+                                        stroke={styles.accent}
+                                        strokeWidth={2.5}
+                                        dot={{ r: 2.5, fill: styles.accent }}
+                                        activeDot={{ r: 4 }}
+                                      />
+                                    </LineChart>
                                   ) : (
                                     <LineChart data={item.trend}>
                                       <XAxis

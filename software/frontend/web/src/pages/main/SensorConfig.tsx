@@ -48,6 +48,21 @@ type MetricThresholdPayload = {
 
 type SetupMode = 'manual' | 'ai_assisted';
 type ThresholdMode = 'min' | 'max' | 'range';
+type UseCaseOption =
+  | 'generic_monitoring'
+  | 'climate_monitoring'
+  | 'fill_level_monitoring'
+  | 'occupancy_monitoring'
+  | 'attendance_monitoring'
+  | 'load_monitoring'
+  | 'safety_monitoring';
+type PresentationProfileOption =
+  | 'single_trend'
+  | 'dual_climate'
+  | 'level_monitoring'
+  | 'counter_status'
+  | 'gauge_status'
+  | 'event_timeline';
 type SensorConfigNavigationState = {
   preferredSetupMode?: SetupMode;
   returnTo?: string;
@@ -131,6 +146,131 @@ const toPositiveIntOrUndefined = (value: string): number | undefined => {
   return Math.round(parsed);
 };
 
+const USE_CASE_OPTIONS: Array<{ value: UseCaseOption; label: string; description: string }> = [
+  { value: 'generic_monitoring', label: 'General Monitoring', description: 'A simple reading-first setup.' },
+  { value: 'climate_monitoring', label: 'Climate Monitoring', description: 'Best for temperature and humidity conditions.' },
+  { value: 'fill_level_monitoring', label: 'Fill Level Monitoring', description: 'Best for bins, tanks, silos, and storage level.' },
+  { value: 'occupancy_monitoring', label: 'Occupancy Monitoring', description: 'Best for people, crowd, or presence tracking.' },
+  { value: 'attendance_monitoring', label: 'Attendance Tracking', description: 'Best for classroom attendance or student presence tracking.' },
+  { value: 'load_monitoring', label: 'Load Monitoring', description: 'Best for capacity, weight, and utilization.' },
+  { value: 'safety_monitoring', label: 'Safety Monitoring', description: 'Best for risk, gas, and unsafe environment alerts.' },
+];
+
+const PRESENTATION_PROFILE_OPTIONS: Array<{
+  value: PresentationProfileOption;
+  label: string;
+  description: string;
+}> = [
+  { value: 'single_trend', label: 'Single Trend', description: 'Current value with one simple trend chart.' },
+  { value: 'dual_climate', label: 'Dual Climate', description: 'Climate-focused layout for temperature and humidity.' },
+  { value: 'level_monitoring', label: 'Level Monitoring', description: 'Level bar or gauge for fill-level style sensors.' },
+  { value: 'counter_status', label: 'Counter Status', description: 'Status-first view for occupancy or count-style sensors.' },
+  { value: 'gauge_status', label: 'Gauge Status', description: 'Gauge-first view for load or safety style sensors.' },
+  { value: 'event_timeline', label: 'Event Timeline', description: 'Best when incidents matter more than continuous trends.' },
+];
+
+const getDefaultUseCaseForSensorType = (sensorType: string): UseCaseOption => {
+  switch (sensorType.toLowerCase()) {
+    case 'temperature':
+    case 'humidity':
+    case 'temperature_humidity':
+    case 'temp_humidity':
+    case 'dht11':
+    case 'dht22':
+      return 'climate_monitoring';
+    case 'ultrasonic':
+      return 'fill_level_monitoring';
+    case 'load':
+    case 'load_cell':
+      return 'load_monitoring';
+    case 'gas_sensor':
+    case 'air_quality':
+      return 'safety_monitoring';
+    default:
+      return 'generic_monitoring';
+  }
+};
+
+const getAllowedUseCasesForSensorType = (sensorType: string): UseCaseOption[] => {
+  switch (sensorType.toLowerCase()) {
+    case 'temperature':
+    case 'humidity':
+      return ['generic_monitoring', 'climate_monitoring'];
+    case 'temperature_humidity':
+    case 'temp_humidity':
+    case 'dht11':
+    case 'dht22':
+      return ['climate_monitoring', 'generic_monitoring'];
+    case 'ultrasonic':
+      return [
+        'generic_monitoring',
+        'fill_level_monitoring',
+        'occupancy_monitoring',
+        'attendance_monitoring',
+      ];
+    case 'load':
+    case 'load_cell':
+      return ['generic_monitoring', 'load_monitoring'];
+    case 'gas_sensor':
+    case 'air_quality':
+      return ['generic_monitoring', 'safety_monitoring'];
+    default:
+      return ['generic_monitoring'];
+  }
+};
+
+const getRecommendedProfileForUseCase = (
+  useCase: UseCaseOption,
+  sensorType: string
+): PresentationProfileOption => {
+  if (
+    useCase === 'climate_monitoring' &&
+    ['temperature_humidity', 'temp_humidity', 'dht11', 'dht22'].includes(sensorType.toLowerCase())
+  ) {
+    return 'dual_climate';
+  }
+
+  switch (useCase) {
+    case 'climate_monitoring':
+      return 'single_trend';
+    case 'fill_level_monitoring':
+      return 'level_monitoring';
+    case 'occupancy_monitoring':
+    case 'attendance_monitoring':
+      return 'counter_status';
+    case 'load_monitoring':
+    case 'safety_monitoring':
+      return 'gauge_status';
+    default:
+      return 'single_trend';
+  }
+};
+
+const getAllowedProfilesForUseCase = (
+  useCase: UseCaseOption,
+  sensorType: string
+): PresentationProfileOption[] => {
+  const normalizedType = sensorType.toLowerCase();
+
+  switch (useCase) {
+    case 'climate_monitoring':
+      if (['temperature_humidity', 'temp_humidity', 'dht11', 'dht22'].includes(normalizedType)) {
+        return ['dual_climate', 'single_trend'];
+      }
+      return ['single_trend'];
+    case 'fill_level_monitoring':
+      return ['level_monitoring', 'gauge_status', 'single_trend'];
+    case 'occupancy_monitoring':
+    case 'attendance_monitoring':
+      return ['counter_status', 'event_timeline', 'single_trend'];
+    case 'load_monitoring':
+    case 'safety_monitoring':
+      return ['gauge_status', 'single_trend', 'event_timeline'];
+    default:
+      return ['single_trend', 'event_timeline'];
+  }
+};
+
 const SensorConfig: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -153,6 +293,9 @@ const SensorConfig: React.FC = () => {
   const [historicalWindowDays, setHistoricalWindowDays] = useState('14');
   const [installationNotes, setInstallationNotes] = useState('');
   const [friendlyName, setFriendlyName] = useState('');
+  const [useCase, setUseCase] = useState<UseCaseOption>('generic_monitoring');
+  const [presentationProfile, setPresentationProfile] = useState<PresentationProfileOption>('single_trend');
+  const [primaryMetric, setPrimaryMetric] = useState('');
   const [metricThresholds, setMetricThresholds] = useState<Record<string, MetricThresholdInput>>({});
   const [reportsPerDay, setReportsPerDay] = useState('24');
   const [readingFlowType, setReadingFlowType] = useState<'CONSTANT_PER_DAY' | 'TRIGGER'>('CONSTANT_PER_DAY');
@@ -163,6 +306,14 @@ const SensorConfig: React.FC = () => {
   const initializedSensorIdRef = useRef<string | null>(null);
 
   const sensorMetrics = useMemo(() => getSensorMetrics(sensor?.type || ''), [sensor?.type]);
+  const allowedUseCases = useMemo(
+    () => getAllowedUseCasesForSensorType(sensor?.type || ''),
+    [sensor?.type]
+  );
+  const allowedPresentationProfiles = useMemo(
+    () => getAllowedProfilesForUseCase(useCase, sensor?.type || ''),
+    [useCase, sensor?.type]
+  );
   const isAiAssisted = setupMode === 'ai_assisted';
   const estimatedBatteryLifeDays = estimateBatteryLifeDays(
     parseInt(reportsPerDay, 10) || 1,
@@ -217,6 +368,19 @@ const SensorConfig: React.FC = () => {
         setHistoricalWindowDays(sensorData.context?.historical_window_days?.toString() || '14');
         setInstallationNotes(sensorData.context?.installation_notes || '');
         setReportsPerDay(sensorData.active_config?.report_interval_per_day?.toString() || '24');
+        setUseCase(
+          (sensorData.active_config?.use_case as UseCaseOption | undefined) ||
+            getDefaultUseCaseForSensorType(sensorData.type || '')
+        );
+        setPresentationProfile(
+          (sensorData.active_config?.presentation_profile as PresentationProfileOption | undefined) ||
+            getRecommendedProfileForUseCase(
+              ((sensorData.active_config?.use_case as UseCaseOption | undefined) ||
+                getDefaultUseCaseForSensorType(sensorData.type || '')) as UseCaseOption,
+              sensorData.type || ''
+            )
+        );
+        setPrimaryMetric(sensorData.active_config?.primary_metric || getSensorMetrics(sensorData.type || '')[0]?.key || '');
 
         const nextMetricThresholds: Record<string, MetricThresholdInput> = {};
         const metrics = getSensorMetrics(sensorData.type || '');
@@ -251,6 +415,28 @@ const SensorConfig: React.FC = () => {
   useEffect(() => {
     initializedSensorIdRef.current = null;
   }, [id]);
+
+  useEffect(() => {
+    if (allowedUseCases.length === 0) {
+      return;
+    }
+
+    if (!allowedUseCases.includes(useCase)) {
+      const nextUseCase = allowedUseCases[0];
+      setUseCase(nextUseCase);
+      setPresentationProfile(getRecommendedProfileForUseCase(nextUseCase, sensor?.type || ''));
+    }
+  }, [allowedUseCases, useCase, sensor?.type]);
+
+  useEffect(() => {
+    if (allowedPresentationProfiles.length === 0) {
+      return;
+    }
+
+    if (!allowedPresentationProfiles.includes(presentationProfile)) {
+      setPresentationProfile(allowedPresentationProfiles[0]);
+    }
+  }, [allowedPresentationProfiles, presentationProfile]);
 
   useEffect(() => {
     if (id) {
@@ -312,6 +498,19 @@ const SensorConfig: React.FC = () => {
 
       setFriendlyName(config.friendly_name);
       setReportsPerDay(config.report_interval_per_day.toString());
+      setUseCase(
+        (config.use_case as UseCaseOption | undefined) ||
+          getDefaultUseCaseForSensorType(sensor?.type || '')
+      );
+      setPresentationProfile(
+        (config.presentation_profile as PresentationProfileOption | undefined) ||
+          getRecommendedProfileForUseCase(
+            ((config.use_case as UseCaseOption | undefined) ||
+              getDefaultUseCaseForSensorType(sensor?.type || '')) as UseCaseOption,
+            sensor?.type || ''
+          )
+      );
+      setPrimaryMetric(config.primary_metric || sensorMetrics[0]?.key || '');
       setValidationStatus(response.validation_status || '');
       setValidationWarnings(response.warnings || []);
       setAiDraftSummary({
@@ -378,6 +577,9 @@ const SensorConfig: React.FC = () => {
 
       const config: SensorConfigPayload = {
         friendly_name: friendlyName.trim(),
+        use_case: useCase,
+        presentation_profile: presentationProfile,
+        primary_metric: primaryMetric || primaryMetricKey || undefined,
         thresholds: {
           min: primaryMetricThreshold.min,
           max: primaryMetricThreshold.max,
@@ -760,6 +962,61 @@ const SensorConfig: React.FC = () => {
             margin="normal"
             required
           />
+
+          <Grid container spacing={2} sx={{ mt: 0.5, mb: 1 }}>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth margin="normal">
+                <InputLabel id="use-case-label">Used For</InputLabel>
+                <Select
+                  labelId="use-case-label"
+                  value={useCase}
+                  label="Used For"
+                  onChange={(e) => {
+                    const nextUseCase = e.target.value as UseCaseOption;
+                    setUseCase(nextUseCase);
+                    setPresentationProfile(getRecommendedProfileForUseCase(nextUseCase, sensor.type || ''));
+                  }}
+                >
+                  {USE_CASE_OPTIONS.filter((option) => allowedUseCases.includes(option.value)).map((option) => (
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <Typography variant="caption" color="text.secondary">
+                {USE_CASE_OPTIONS.find((option) => option.value === useCase)?.description}
+              </Typography>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth margin="normal">
+                <InputLabel id="presentation-profile-label">Dashboard View</InputLabel>
+                <Select
+                  labelId="presentation-profile-label"
+                  value={presentationProfile}
+                  label="Dashboard View"
+                  onChange={(e) =>
+                    setPresentationProfile(e.target.value as PresentationProfileOption)
+                  }
+                >
+                  {PRESENTATION_PROFILE_OPTIONS.filter((option) =>
+                    allowedPresentationProfiles.includes(option.value)
+                  ).map((option) => (
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <Typography variant="caption" color="text.secondary">
+                {
+                  PRESENTATION_PROFILE_OPTIONS.find(
+                    (option) => option.value === presentationProfile
+                  )?.description
+                }
+              </Typography>
+            </Grid>
+          </Grid>
 
           {sensorMetrics.map((metric) => (
             <Box key={metric.key} sx={{ mt: 2 }}>
