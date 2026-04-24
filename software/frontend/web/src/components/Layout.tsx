@@ -119,11 +119,16 @@ const Layout: React.FC = () => {
                     borderRadius: 999,
                     color: value === index ? '#fffdf8' : 'text.secondary',
                     bgcolor: value === index ? 'primary.dark' : 'transparent',
+                    textDecoration: 'none',
                     '&:hover': {
                       bgcolor: value === index ? 'primary.dark' : 'rgba(108, 137, 48, 0.1)',
+                      textDecoration: 'none',
                     },
                     '& .MuiSvgIcon-root': {
                       color: value === index ? 'secondary.light' : 'primary.main',
+                    },
+                    '& .MuiTypography-root': {
+                      textDecoration: 'none',
                     },
                   }}
                 >
