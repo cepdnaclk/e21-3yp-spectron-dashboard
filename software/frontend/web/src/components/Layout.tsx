@@ -81,11 +81,11 @@ const Layout: React.FC = () => {
           <Box
             sx={{
               height: '100%',
-              bgcolor: '#fffdf8',
-              border: '1px solid rgba(60, 57, 17, 0.12)',
-              borderRadius: 2,
+              bgcolor: 'transparent',
+              borderRight: '1px solid rgba(60, 57, 17, 0.1)',
+              borderRadius: 0,
               p: 2,
-              boxShadow: '0 22px 50px rgba(60, 57, 17, 0.1)',
+              boxShadow: 'none',
               display: 'flex',
               flexDirection: 'column',
             }}
@@ -114,7 +114,7 @@ const Layout: React.FC = () => {
                     gap: 1.5,
                     px: 1.5,
                     py: 1.25,
-                    borderRadius: 2,
+                    borderRadius: 999,
                     color: value === index ? '#fffdf8' : 'text.secondary',
                     bgcolor: value === index ? 'primary.dark' : 'transparent',
                     '&:hover': {
@@ -133,7 +133,15 @@ const Layout: React.FC = () => {
               ))}
             </Stack>
 
-            <Box sx={{ mt: 'auto', p: 1.5, borderRadius: 2, bgcolor: '#faf0ea' }}>
+            <Box
+              sx={{
+                mt: 'auto',
+                p: 1.5,
+                borderRadius: 0,
+                bgcolor: 'transparent',
+                borderTop: '1px solid rgba(60, 57, 17, 0.1)',
+              }}
+            >
               <Typography variant="caption" color="text.secondary">
                 Signed in as
               </Typography>
@@ -203,7 +211,7 @@ const Layout: React.FC = () => {
             right: 12,
             borderRadius: 2,
             border: '1px solid rgba(60, 57, 17, 0.12)',
-            boxShadow: '0 18px 36px rgba(60, 57, 17, 0.18)',
+            boxShadow: 'none',
             overflow: 'hidden',
             zIndex: 20,
           }}

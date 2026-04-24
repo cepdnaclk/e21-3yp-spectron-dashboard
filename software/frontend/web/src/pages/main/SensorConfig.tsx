@@ -396,7 +396,7 @@ const SensorConfig: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ py: { xs: 2, md: 3 } }}>
-      <Paper elevation={0} sx={{ p: { xs: 2.5, md: 3.5 }, borderRadius: 2, border: '1px solid rgba(60, 57, 17, 0.1)' }}>
+      <Paper elevation={0} sx={{ p: { xs: 2.5, md: 3.5 }, borderRadius: 2, border: 'none', backgroundColor: 'transparent' }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} sx={{ mb: 2 }}>
           <Box>
             <Typography variant="overline" color="secondary" fontWeight={800}>
@@ -406,7 +406,7 @@ const SensorConfig: React.FC = () => {
               Configure {sensor.type} Sensor
             </Typography>
           </Box>
-          <Box sx={{ p: 1.4, borderRadius: 2, bgcolor: 'rgba(108, 137, 48, 0.12)' }}>
+          <Box sx={{ p: 1.4, borderRadius: '50%', bgcolor: 'rgba(108, 137, 48, 0.12)' }}>
             <Tune color="primary" />
           </Box>
         </Stack>
@@ -448,7 +448,7 @@ const SensorConfig: React.FC = () => {
           </Alert>
         )}
 
-        <Box sx={{ mt: 3 }}>
+        <Box sx={{ mt: 3, pt: 3, borderTop: '1px solid rgba(60, 57, 17, 0.08)' }}>
           <Typography variant="subtitle1" gutterBottom>
             Setup Mode
           </Typography>
@@ -481,7 +481,7 @@ const SensorConfig: React.FC = () => {
         </Box>
 
         {isAiAssisted && (
-          <Box sx={{ mt: 3 }}>
+          <Box sx={{ mt: 3, pt: 3, borderTop: '1px solid rgba(60, 57, 17, 0.08)' }}>
             <Typography variant="subtitle1" gutterBottom>
               Context
             </Typography>
@@ -605,7 +605,7 @@ const SensorConfig: React.FC = () => {
         )}
 
         {setupMode === 'ai_assisted' && (
-          <Box sx={{ mt: 3 }}>
+          <Box sx={{ mt: 3, pt: 3, borderTop: '1px solid rgba(60, 57, 17, 0.08)' }}>
           <Typography variant="subtitle1" gutterBottom>
             AI Support
           </Typography>
@@ -663,7 +663,7 @@ const SensorConfig: React.FC = () => {
           </Box>
         )}
 
-        <Box sx={{ mt: 4 }}>
+        <Box sx={{ mt: 4, pt: 3, borderTop: '1px solid rgba(60, 57, 17, 0.08)' }}>
           <Typography variant="subtitle1" gutterBottom>
             Configuration
           </Typography>

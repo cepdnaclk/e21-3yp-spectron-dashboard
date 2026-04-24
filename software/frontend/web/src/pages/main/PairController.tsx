@@ -178,9 +178,9 @@ const PairController: React.FC = () => {
 
   return (
     <Container maxWidth="md" sx={{ py: { xs: 2, md: 3 } }}>
-      <Paper elevation={0} sx={{ p: { xs: 2.5, md: 3.5 }, borderRadius: 2, border: '1px solid rgba(60, 57, 17, 0.1)' }}>
+      <Paper elevation={0} sx={{ p: { xs: 2.5, md: 3.5 }, borderRadius: 2, border: 'none', backgroundColor: 'transparent' }}>
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}>
-          <Box sx={{ p: 1, borderRadius: 2, bgcolor: 'rgba(235, 79, 18, 0.12)' }}>
+          <Box sx={{ p: 1, borderRadius: '50%', bgcolor: 'rgba(235, 79, 18, 0.12)' }}>
             <QrCodeScanner color="secondary" />
           </Box>
           <Box>
@@ -201,7 +201,7 @@ const PairController: React.FC = () => {
         )}
 
         {!pairedController ? (
-          <Box component="form" onSubmit={handlePair}>
+          <Box component="form" onSubmit={handlePair} sx={{ mt: 3, pt: 3, borderTop: '1px solid rgba(60, 57, 17, 0.08)' }}>
             {isScannerSupported ? (
               <Box sx={{ mb: 2 }}>
                 {!isCameraRunning ? (
@@ -218,7 +218,7 @@ const PairController: React.FC = () => {
                     mt: 1,
                     borderRadius: 2,
                     overflow: 'hidden',
-                    border: '1px solid',
+                    border: '1.5px solid',
                     borderColor: 'divider',
                     bgcolor: '#262411',
                     display: isCameraRunning ? 'block' : 'none',
@@ -260,7 +260,7 @@ const PairController: React.FC = () => {
             </Button>
           </Box>
         ) : (
-          <Box>
+          <Box sx={{ mt: 3, pt: 3, borderTop: '1px solid rgba(60, 57, 17, 0.08)' }}>
             <Alert severity="success" sx={{ mb: 2 }}>
               <Stack direction="row" spacing={1} alignItems="center">
                 <CheckCircle fontSize="small" />

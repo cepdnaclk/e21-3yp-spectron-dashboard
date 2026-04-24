@@ -57,7 +57,7 @@ export const AuthGateSkeleton: React.FC = () => (
         />
         <Box sx={{ flex: 1, pt: { xs: 3, md: 4 }, px: { xs: 0, md: 2 } }}>
           <Skeleton width={180} height={34} sx={{ mb: 3 }} />
-          <Skeleton variant="rounded" height={190} sx={{ mb: 3, borderRadius: 2 }} />
+          <Skeleton variant="rounded" height={190} sx={{ mb: 3, borderRadius: 1.6 }} />
           <Grid container spacing={2}>
             {[0, 1, 2, 3].map((item) => cardSkeleton(item, 168))}
           </Grid>
@@ -70,7 +70,7 @@ export const AuthGateSkeleton: React.FC = () => (
 export const ControllersSkeleton: React.FC = () => (
   <Fade in timeout={350}>
     <Container maxWidth="xl" sx={{ py: { xs: 2, md: 3 } }}>
-      <Skeleton variant="rounded" height={190} sx={{ mb: 3, borderRadius: 2 }} />
+      <Skeleton variant="rounded" height={190} sx={{ mb: 3, borderRadius: 1.6 }} />
       <Grid container spacing={2}>
         {[0, 1, 2, 3, 4, 5].map((item) => cardSkeleton(item))}
       </Grid>
@@ -81,7 +81,7 @@ export const ControllersSkeleton: React.FC = () => (
 export const ControllerDashboardSkeleton: React.FC = () => (
   <Fade in timeout={350}>
     <Container maxWidth="xl" sx={{ py: { xs: 2, md: 3 } }}>
-      <Skeleton variant="rounded" height={190} sx={{ mb: 3, borderRadius: 2 }} />
+      <Skeleton variant="rounded" height={190} sx={{ mb: 3, borderRadius: 1.6 }} />
       <Box sx={{ mb: 2 }}>
         <Skeleton width={150} height={22} />
         <Skeleton width={220} height={36} />
@@ -159,7 +159,7 @@ export const MonitoringSkeleton: React.FC = () => (
 export const SensorConfigSkeleton: React.FC = () => (
   <Fade in timeout={350}>
     <Container maxWidth="xl" sx={{ py: { xs: 2, md: 3 } }}>
-      <Paper elevation={0} sx={{ p: { xs: 2.5, md: 3.5 }, borderRadius: 2 }}>
+      <Paper elevation={0} sx={{ p: { xs: 2.5, md: 3.5 }, borderRadius: 1.6 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
           <Box sx={{ flex: 1 }}>
             <Skeleton width={120} height={22} />

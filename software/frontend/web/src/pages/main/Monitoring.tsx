@@ -193,7 +193,7 @@ const Monitoring: React.FC = () => {
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
         <Card sx={{ flex: 1 }}>
           <CardContent sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            <Box sx={{ p: 1.2, borderRadius: 2, bgcolor: 'rgba(108, 137, 48, 0.12)' }}>
+            <Box sx={{ p: 1.2, borderRadius: '50%', bgcolor: 'rgba(108, 137, 48, 0.12)' }}>
               <Sensors color="primary" />
             </Box>
             <Box>
@@ -204,7 +204,7 @@ const Monitoring: React.FC = () => {
         </Card>
         <Card sx={{ flex: 1 }}>
           <CardContent sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            <Box sx={{ p: 1.2, borderRadius: 2, bgcolor: 'rgba(108, 137, 48, 0.12)' }}>
+            <Box sx={{ p: 1.2, borderRadius: '50%', bgcolor: 'rgba(108, 137, 48, 0.12)' }}>
               <CheckCircle color="primary" />
             </Box>
             <Box>
@@ -215,7 +215,7 @@ const Monitoring: React.FC = () => {
         </Card>
         <Card sx={{ flex: 1 }}>
           <CardContent sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            <Box sx={{ p: 1.2, borderRadius: 2, bgcolor: 'rgba(235, 79, 18, 0.12)' }}>
+            <Box sx={{ p: 1.2, borderRadius: '50%', bgcolor: 'rgba(235, 79, 18, 0.12)' }}>
               <AutoGraph color="secondary" />
             </Box>
             <Box>
@@ -271,34 +271,41 @@ const Monitoring: React.FC = () => {
                       />
                     </Stack>
 
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                      Last 7 Days Trend
-                    </Typography>
-
-                    {item.trend.length === 0 ? (
-                      <Typography variant="body2" color="text.secondary">
-                        No readings available in the last 7 days.
+                    <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid rgba(60, 57, 17, 0.08)' }}>
+                      <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                        Last 7 Days Trend
                       </Typography>
-                    ) : (
-                      <Box sx={{ width: '100%', height: 220 }}>
-                        <ResponsiveContainer>
-                          <LineChart data={item.trend} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(60, 57, 17, 0.12)" />
-                            <XAxis dataKey="day" />
-                            <YAxis />
-                            <Tooltip />
-                            <Line
-                              type="monotone"
-                              dataKey="value"
-                              stroke={theme.palette.primary.main}
-                              strokeWidth={2}
-                              dot={{ r: 2 }}
-                              activeDot={{ r: 5 }}
-                            />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      </Box>
-                    )}
+
+                      {item.trend.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">
+                          No readings available in the last 7 days.
+                        </Typography>
+                      ) : (
+                        <Box
+                          sx={{
+                            width: '100%',
+                            height: 220,
+                          }}
+                        >
+                          <ResponsiveContainer>
+                            <LineChart data={item.trend} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(60, 57, 17, 0.12)" />
+                              <XAxis dataKey="day" />
+                              <YAxis />
+                              <Tooltip />
+                              <Line
+                                type="monotone"
+                                dataKey="value"
+                                stroke={theme.palette.primary.main}
+                                strokeWidth={2}
+                                dot={{ r: 2 }}
+                                activeDot={{ r: 5 }}
+                              />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </Box>
+                      )}
+                    </Box>
                   </CardContent>
                 </Card>
               </Grid>
