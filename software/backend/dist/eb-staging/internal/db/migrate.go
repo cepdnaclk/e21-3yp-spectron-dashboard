@@ -17,6 +17,9 @@ var migration001Init string
 //go:embed migrations/003_context_validation_and_security.sql
 var migration003ContextValidationAndSecurity string
 
+//go:embed migrations/004_user_profile.sql
+var migration004UserProfile string
+
 type migration struct {
 	name string
 	sql  string
@@ -25,6 +28,7 @@ type migration struct {
 var startupMigrations = []migration{
 	{name: "001_init", sql: migration001Init},
 	{name: "003_context_validation_and_security", sql: migration003ContextValidationAndSecurity},
+	{name: "004_user_profile", sql: migration004UserProfile},
 }
 
 func ApplyStartupMigrations(ctx context.Context, pool *pgxpool.Pool) error {
