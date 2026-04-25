@@ -67,6 +67,7 @@ func RegisterRoutes(r chi.Router, db *pgxpool.Pool, allowedOrigins []string, raw
 		// Auth
 		r.Get("/auth/me", authHandler.Me)
 		r.Patch("/auth/me", authHandler.UpdateProfile)
+		r.Delete("/auth/me", authHandler.DeleteAccount)
 		r.Post("/auth/change-password", authHandler.ChangePassword)
 		r.Get("/users", authHandler.ListUsers)
 

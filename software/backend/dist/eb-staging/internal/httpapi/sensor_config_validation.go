@@ -25,6 +25,22 @@ type metricSpec struct {
 	Default    models.ThresholdConfig
 }
 
+const (
+	useCaseGeneric     = "generic_monitoring"
+	useCaseClimate     = "climate_monitoring"
+	useCaseFillLevel   = "fill_level_monitoring"
+	useCaseOccupancy   = "occupancy_monitoring"
+	useCaseAttendance  = "attendance_monitoring"
+	useCaseLoad        = "load_monitoring"
+	useCaseSafety      = "safety_monitoring"
+	profileSingleTrend = "single_trend"
+	profileDualClimate = "dual_climate"
+	profileLevel       = "level_monitoring"
+	profileCounter     = "counter_status"
+	profileGauge       = "gauge_status"
+	profileTimeline    = "event_timeline"
+)
+
 func normalizeSensorContext(ctx *models.SensorContext) *models.SensorContext {
 	if ctx == nil {
 		return nil
@@ -195,6 +211,168 @@ func defaultControllerCapability() controllerCapability {
 		SupportsLocalAlerts:      false,
 		OfflineBufferCapacity:    2000,
 		Profile:                  map[string]any{},
+	}
+}
+
+func normalizeSuggestionValue(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func compactSuggestionText(parts ...string) string {
+	joined := strings.Join(parts, " ")
+	joined = strings.ToLower(joined)
+	replacer := strings.NewReplacer("_", " ", "-", " ", ",", " ", ";", " ", ".", " ", "/", " ")
+	return strings.Join(strings.Fields(replacer.Replace(joined)), " ")
+}
+
+func containsAnyKeyword(text string, keywords ...string) bool {
+	for _, keyword := range keywords {
+		if strings.Contains(text, keyword) {
+			return true
+		}
+	}
+	return false
+}
+
+func inferUseCaseAndProfile(
+	sensorType string,
+	purpose string,
+	ctx *models.SensorContext,
+	requestedUseCase string,
+	requestedProfile string,
+	defaultPrimaryMetric string,
+) (string, string, string, []string) {
+	sensorType = normalizeSuggestionValue(sensorType)
+	requestedUseCase = normalizeSuggestionValue(requestedUseCase)
+	requestedProfile = normalizeSuggestionValue(requestedProfile)
+
+	locationLabel := ""
+	if ctx != nil && ctx.Location != nil {
+		locationLabel = ctx.Location.Label
+	}
+
+	text := compactSuggestionText(
+		purpose,
+		locationLabel,
+		func() string {
+			if ctx == nil {
+				return ""
+			}
+			return strings.Join([]string{
+				ctx.Domain,
+				ctx.EnvironmentType,
+				ctx.IndoorOutdoor,
+				ctx.AssetType,
+				ctx.InstallationNotes,
+			}, " ")
+		}(),
+	)
+
+	suggestedUseCase := requestedUseCase
+	suggestedProfile := requestedProfile
+	appliedRules := []string{}
+
+	switch sensorType {
+	case "temperature_humidity", "temp_humidity", "dht11", "dht22":
+		if suggestedUseCase == "" {
+			suggestedUseCase = useCaseClimate
+			appliedRules = append(appliedRules, "use_case_default_climate")
+		}
+		if suggestedProfile == "" {
+			suggestedProfile = profileDualClimate
+			appliedRules = append(appliedRules, "presentation_profile_default_dual_climate")
+		}
+		return suggestedUseCase, suggestedProfile, "temperature", appliedRules
+	case "temperature", "humidity":
+		if suggestedUseCase == "" {
+			suggestedUseCase = useCaseClimate
+			appliedRules = append(appliedRules, "use_case_default_climate")
+		}
+		if suggestedProfile == "" {
+			suggestedProfile = profileSingleTrend
+			appliedRules = append(appliedRules, "presentation_profile_default_single_trend")
+		}
+		return suggestedUseCase, suggestedProfile, defaultPrimaryMetric, appliedRules
+	case "ultrasonic":
+		if suggestedUseCase == "" {
+			if containsAnyKeyword(text, "attendance", "class attendance", "classroom", "class", "student", "students", "lesson", "lecture") {
+				suggestedUseCase = useCaseAttendance
+				appliedRules = append(appliedRules, "use_case_inferred_attendance")
+			} else if containsAnyKeyword(text, "occupancy", "people", "person", "crowd", "queue", "visitor", "entry", "footfall") {
+				suggestedUseCase = useCaseOccupancy
+				appliedRules = append(appliedRules, "use_case_inferred_occupancy")
+			} else if containsAnyKeyword(text, "fill", "level", "bin", "tank", "silo", "container", "bay", "storage") {
+				suggestedUseCase = useCaseFillLevel
+				appliedRules = append(appliedRules, "use_case_inferred_fill_level")
+			} else {
+				suggestedUseCase = useCaseFillLevel
+				appliedRules = append(appliedRules, "use_case_default_fill_level")
+			}
+		}
+	case "load", "load_cell":
+		if suggestedUseCase == "" {
+			suggestedUseCase = useCaseLoad
+			appliedRules = append(appliedRules, "use_case_default_load")
+		}
+	case "gas_sensor", "air_quality":
+		if suggestedUseCase == "" {
+			suggestedUseCase = useCaseSafety
+			appliedRules = append(appliedRules, "use_case_default_safety")
+		}
+	default:
+		if suggestedUseCase == "" {
+			suggestedUseCase = useCaseGeneric
+			appliedRules = append(appliedRules, "use_case_default_generic")
+		}
+	}
+
+	if suggestedProfile == "" {
+		switch suggestedUseCase {
+		case useCaseClimate:
+			suggestedProfile = profileSingleTrend
+		case useCaseFillLevel:
+			suggestedProfile = profileLevel
+		case useCaseOccupancy, useCaseAttendance:
+			suggestedProfile = profileCounter
+		case useCaseLoad, useCaseSafety:
+			suggestedProfile = profileGauge
+		default:
+			suggestedProfile = profileSingleTrend
+		}
+		appliedRules = append(appliedRules, "presentation_profile_inferred")
+	}
+
+	switch sensorType {
+	case "temperature_humidity", "temp_humidity", "dht11", "dht22":
+		if suggestedProfile != profileDualClimate && suggestedProfile != profileSingleTrend {
+			suggestedProfile = profileDualClimate
+			appliedRules = append(appliedRules, "presentation_profile_compatibility_adjustment")
+		}
+		return suggestedUseCase, suggestedProfile, "temperature", appliedRules
+	case "ultrasonic":
+		if (suggestedUseCase == useCaseOccupancy || suggestedUseCase == useCaseAttendance) && suggestedProfile == profileLevel {
+			suggestedProfile = profileCounter
+			appliedRules = append(appliedRules, "presentation_profile_compatibility_adjustment")
+		}
+		return suggestedUseCase, suggestedProfile, defaultPrimaryMetric, appliedRules
+	case "load", "load_cell":
+		if suggestedProfile == profileDualClimate || suggestedProfile == profileCounter {
+			suggestedProfile = profileGauge
+			appliedRules = append(appliedRules, "presentation_profile_compatibility_adjustment")
+		}
+		return suggestedUseCase, suggestedProfile, defaultPrimaryMetric, appliedRules
+	case "gas_sensor", "air_quality":
+		if suggestedProfile == profileDualClimate || suggestedProfile == profileLevel {
+			suggestedProfile = profileGauge
+			appliedRules = append(appliedRules, "presentation_profile_compatibility_adjustment")
+		}
+		return suggestedUseCase, suggestedProfile, defaultPrimaryMetric, appliedRules
+	default:
+		if suggestedProfile == profileDualClimate {
+			suggestedProfile = profileSingleTrend
+			appliedRules = append(appliedRules, "presentation_profile_compatibility_adjustment")
+		}
+		return suggestedUseCase, suggestedProfile, defaultPrimaryMetric, appliedRules
 	}
 }
 
@@ -454,7 +632,7 @@ func validateThreshold(metricKey string, spec metricSpec, cfg models.ThresholdCo
 	return finalCfg
 }
 
-func validateAndFinalizeConfig(sensorType string, ctx *models.SensorContext, config models.SensorConfig, capability controllerCapability, calibrationStatus string) models.ConfigValidationResult {
+func validateAndFinalizeConfig(sensorType string, purpose string, ctx *models.SensorContext, config models.SensorConfig, capability controllerCapability, calibrationStatus string) models.ConfigValidationResult {
 	normalizedContext := normalizeSensorContext(ctx)
 	primaryMetric, specs, specRules := metricSpecsForSensor(sensorType, normalizedContext)
 	appliedRules := map[string]bool{}
@@ -479,6 +657,18 @@ func validateAndFinalizeConfig(sensorType string, ctx *models.SensorContext, con
 		if _, exists := metricThresholds[primaryMetric]; exists {
 			metricThresholds[primaryMetric] = config.Thresholds
 		}
+	}
+
+	finalUseCase, finalPresentationProfile, finalPrimaryMetric, suggestionRules := inferUseCaseAndProfile(
+		sensorType,
+		purpose,
+		normalizedContext,
+		config.UseCase,
+		config.PresentationProfile,
+		primaryMetric,
+	)
+	for _, rule := range suggestionRules {
+		appliedRules[rule] = true
 	}
 
 	warnings := []string{}
@@ -564,6 +754,18 @@ func validateAndFinalizeConfig(sensorType string, ctx *models.SensorContext, con
 		"asset_defaults_tomato",
 		"context_defaults_warehouse",
 		"context_defaults_home",
+		"use_case_default_climate",
+		"use_case_inferred_attendance",
+		"use_case_inferred_fill_level",
+		"use_case_default_fill_level",
+		"use_case_inferred_occupancy",
+		"use_case_default_load",
+		"use_case_default_safety",
+		"use_case_default_generic",
+		"presentation_profile_default_dual_climate",
+		"presentation_profile_default_single_trend",
+		"presentation_profile_inferred",
+		"presentation_profile_compatibility_adjustment",
 		"metric_range_clamp",
 		"threshold_consistency",
 		"required_defaults",
@@ -581,6 +783,9 @@ func validateAndFinalizeConfig(sensorType string, ctx *models.SensorContext, con
 	return models.ConfigValidationResult{
 		FinalConfig: models.SensorConfig{
 			FriendlyName:         strings.TrimSpace(config.FriendlyName),
+			UseCase:              finalUseCase,
+			PresentationProfile:  finalPresentationProfile,
+			PrimaryMetric:        finalPrimaryMetric,
 			Thresholds:           finalThresholds,
 			MetricThresholds:     metricThresholds,
 			ReportIntervalPerDay: reportsPerDay,

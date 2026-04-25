@@ -16,6 +16,7 @@ type Sensor struct {
 	Unit              *string            `json:"unit,omitempty"`
 	Status            string             `json:"status"` // OK, OFFLINE, ERROR
 	ConfigActive      bool               `json:"config_active"`
+	ActiveConfig      *SensorConfig      `json:"active_config,omitempty"`
 	LastSeen          *time.Time         `json:"last_seen,omitempty"`
 	Context           *SensorContext     `json:"context,omitempty"`
 	Observation       *SensorObservation `json:"observation,omitempty"`
@@ -36,6 +37,9 @@ type SensorObservation struct {
 
 type SensorConfig struct {
 	FriendlyName         string                     `json:"friendly_name"`
+	UseCase              string                     `json:"use_case,omitempty"`
+	PresentationProfile  string                     `json:"presentation_profile,omitempty"`
+	PrimaryMetric        string                     `json:"primary_metric,omitempty"`
 	Thresholds           ThresholdConfig            `json:"thresholds"`
 	MetricThresholds     map[string]ThresholdConfig `json:"metric_thresholds,omitempty"`
 	ReportIntervalPerDay int                        `json:"report_interval_per_day"`

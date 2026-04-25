@@ -31,6 +31,7 @@ type sensorMetadata struct {
 func scanSensorRecord(scanner rowScanner) (models.Sensor, error) {
 	var sensor models.Sensor
 	var rawContext []byte
+	var rawActiveConfig []byte
 	var activeConfigCreatedAt *time.Time
 	var activeConfigReportsPerDay *int
 	var observationReadings int
@@ -45,6 +46,7 @@ func scanSensorRecord(scanner rowScanner) (models.Sensor, error) {
 		&sensor.Unit,
 		&sensor.Status,
 		&sensor.ConfigActive,
+		&rawActiveConfig,
 		&sensor.LastSeen,
 		&rawContext,
 		&activeConfigCreatedAt,
@@ -56,6 +58,13 @@ func scanSensorRecord(scanner rowScanner) (models.Sensor, error) {
 		&sensor.CalibrationStatus,
 	); err != nil {
 		return models.Sensor{}, err
+	}
+
+	if len(rawActiveConfig) > 0 && string(rawActiveConfig) != "null" {
+		var activeConfig models.SensorConfig
+		if err := json.Unmarshal(rawActiveConfig, &activeConfig); err == nil {
+			sensor.ActiveConfig = &activeConfig
+		}
 	}
 
 	sensor.Context = parseSensorContext(rawContext)
