@@ -547,6 +547,58 @@ body::before {
   }
 }
 
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.trace-item {
+  animation: slideIn 300ms ease-out;
+}
+
+.stage-card[data-state="active"] {
+  animation: fadeIn 200ms ease-out;
+}
+
+.empty-state {
+  animation: fadeIn 200ms ease-out;
+}
+
+.loading-pulse {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03),
+    rgba(39, 211, 195, 0.1),
+    rgba(255, 255, 255, 0.03)
+  );
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite;
+}
+
 @media (max-width: 1180px) {
   .hero,
   .content-grid {

@@ -5,37 +5,47 @@ const MAX_TRACES = 8;
 
 const liveStages = [
   {
-    id: "controller-packet",
-    title: "Controller Packet",
-    description: "ESP32 and SIM800 assemble the JSON payload and start the HTTP uplink.",
+    id: "device-sensor",
+    title: "Device / Sensor",
+    description: "ESP32 or SIM800 device assembles the JSON payload with sensor readings.",
   },
   {
-    id: "http-ingest",
-    title: "HTTP Ingest",
-    description: "The packet reaches POST /api/iot/upload on the debug ingest server.",
+    id: "ingest-server",
+    title: "Ingest Server",
+    description: "The packet reaches POST /api/iot/upload on the ingest service.",
   },
   {
-    id: "upload-store",
-    title: "Upload Store",
-    description: "The ingest service writes the payload into SQLite and exposes it through uploads.json.",
+    id: "validation",
+    title: "Validation",
+    description: "Payload is validated against Spectron schema and data types.",
   },
   {
-    id: "tracker-visual",
-    title: "Tracker Visual",
-    description: "This separate demo site detects the new upload and animates the packet flow in realtime.",
+    id: "processing",
+    title: "Processing / Rules Engine",
+    description: "Rules engine evaluates alerts and thresholds against the reading.",
+  },
+  {
+    id: "storage",
+    title: "Storage / Database",
+    description: "Validated reading is written to PostgreSQL and time-series storage.",
+  },
+  {
+    id: "dashboard",
+    title: "Dashboard / Output",
+    description: "The latest reading appears in real-time dashboards and APIs.",
   },
 ];
 
 const futureStages = [
   {
-    id: "backend-bridge",
-    title: "Backend Bridge",
-    description: "Next step: transform incoming uploads into the main PostgreSQL sensor_readings table.",
+    id: "ml-processing",
+    title: "ML Model Processing",
+    description: "Future: Anomaly detection and predictive analytics on incoming data.",
   },
   {
-    id: "monitoring-alerts",
-    title: "Monitoring and Alerts",
-    description: "Next step: feed the main monitoring dashboard and automatic alert generation from live readings.",
+    id: "integration",
+    title: "External Integration",
+    description: "Future: Send alerts to Slack, webhook integrations, and third-party systems.",
   },
 ];
 
@@ -389,16 +399,18 @@ async function pollUploads() {
     });
 
     if (!response.ok) {
-      throw new Error(`Unexpected status ${response.status}`);
+      throw new Error(`HTTP ${response.status}`);
     }
 
     const uploads = await response.json();
     const latestUpload = Array.isArray(uploads) && uploads.length > 0 ? uploads[0] : null;
 
+    // Connection successful
     state.connectionStatus = "live";
     state.lastPollAt = new Date().toISOString();
     state.latestUpload = latestUpload;
 
+    // Bootstrap: record all existing uploads on first successful poll
     if (!state.bootstrapped) {
       (Array.isArray(uploads) ? uploads : []).forEach((upload) => seenUploadIds.add(upload.id));
       state.bootstrapped = true;
@@ -406,10 +418,12 @@ async function pollUploads() {
       return;
     }
 
+    // Find new uploads that arrived since last poll
     const newUploads = (Array.isArray(uploads) ? uploads : [])
       .filter((upload) => !seenUploadIds.has(upload.id))
       .sort((left, right) => left.id - right.id);
 
+    // Start animation for each new packet
     newUploads.forEach((upload) => {
       seenUploadIds.add(upload.id);
       startTrace(upload, "live");
@@ -417,35 +431,79 @@ async function pollUploads() {
 
     renderAll();
   } catch (error) {
+    // Connection failed
     state.connectionStatus = "offline";
     state.lastPollAt = new Date().toISOString();
+    
+    console.warn(`[Poll Error] Failed to reach ${state.sourceUrl}/uploads.json:`, error.message);
     renderAll();
   }
 }
 
 function connectSource() {
-  state.sourceUrl = normalizeSourceUrl(elements.sourceUrlInput.value);
+  const newUrl = normalizeSourceUrl(elements.sourceUrlInput.value);
+  
+  if (newUrl === state.sourceUrl && state.connectionStatus === "live") {
+    console.log(`[Pipeline Tracker] Already connected to ${state.sourceUrl}`);
+    elements.sourceHint.textContent = "Already connected to this source.";
+    return;
+  }
+
+  console.log(`[Pipeline Tracker] Connecting to: ${newUrl}`);
+  elements.sourceHint.textContent = "Connecting...";
+  elements.saveSourceButton.disabled = true;
+
+  state.sourceUrl = newUrl;
+  state.connectionStatus = "checking";
   localStorage.setItem("spectron_pipeline_source", state.sourceUrl);
   state.bootstrapped = false;
   seenUploadIds.clear();
+  
   renderAll();
-  pollUploads();
+
+  // Test connection immediately
+  pollUploads().finally(() => {
+    elements.saveSourceButton.disabled = false;
+    
+    if (state.connectionStatus === "live") {
+      console.log(`[Pipeline Tracker] Connected successfully to ${state.sourceUrl}`);
+      elements.sourceHint.textContent = `✓ Connected. Polling every ${POLL_INTERVAL_MS / 1000}s.`;
+      elements.replayButton.disabled = false;
+      elements.clearButton.disabled = false;
+    } else {
+      console.warn(`[Pipeline Tracker] Failed to connect to ${state.sourceUrl}`);
+      elements.sourceHint.textContent = `✗ Connection failed. Check the URL and try again.`;
+      elements.replayButton.disabled = true;
+      elements.clearButton.disabled = false;
+    }
+  });
 }
 
 function replayLatestPacket() {
   if (!state.latestUpload) {
-    alert("No packet has been seen yet. Let the ingest server receive one first.");
+    console.warn(`[Pipeline Tracker] No packet to replay yet`);
+    elements.sourceHint.textContent = "No packet has been captured yet. Wait for a packet to arrive.";
     return;
   }
 
+  console.log(`[Pipeline Tracker] Replaying packet: ${state.latestUpload.id}`);
   startTrace(state.latestUpload, "replay");
+  elements.sourceHint.textContent = "Replaying packet...";
+  setTimeout(() => {
+    elements.sourceHint.textContent = `✓ Connected. Polling every ${POLL_INTERVAL_MS / 1000}s.`;
+  }, 2000);
 }
 
 function clearHistory() {
+  console.log(`[Pipeline Tracker] Clearing history`);
   clearTimers();
   state.traces = [];
   state.trackedPackets = 0;
   renderAll();
+  elements.sourceHint.textContent = "History cleared. Ready for new packets.";
+  setTimeout(() => {
+    elements.sourceHint.textContent = `✓ Connected. Polling every ${POLL_INTERVAL_MS / 1000}s.`;
+  }, 2000);
 }
 
 function attachEvents() {
@@ -457,13 +515,33 @@ function attachEvents() {
       connectSource();
     }
   });
+
+  // Enable buttons on first interaction
+  elements.replayButton.disabled = true;
+  elements.clearButton.disabled = true;
 }
 
 function bootstrap() {
+  console.log(`[Pipeline Tracker] Initializing...`);
+  console.log(`[Pipeline Tracker] Default source: ${DEFAULT_SOURCE_URL}`);
+  console.log(`[Pipeline Tracker] Poll interval: ${POLL_INTERVAL_MS}ms`);
+  
   attachEvents();
   renderAll();
+  
+  // Initial poll
+  console.log(`[Pipeline Tracker] Starting initial connection...`);
   pollUploads();
-  window.setInterval(pollUploads, POLL_INTERVAL_MS);
+  
+  // Set up polling interval
+  const pollTimer = window.setInterval(() => {
+    pollUploads();
+  }, POLL_INTERVAL_MS);
+  
+  timers.add(pollTimer);
+  
+  console.log(`[Pipeline Tracker] Ready! Polling started.`);
 }
 
+// Start the application
 bootstrap();
