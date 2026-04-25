@@ -15,6 +15,9 @@ import {
   IconButton,
   InputAdornment,
   Collapse,
+  Divider,
+  Chip,
+  Tooltip,
 } from '@mui/material';
 import {
   Logout,
@@ -23,6 +26,8 @@ import {
   LockReset,
   Visibility,
   VisibilityOff,
+  ContentCopy,
+  DeleteOutline,
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import { changePassword, updateProfile } from '../../services/authService';
@@ -30,6 +35,23 @@ import { changePassword, updateProfile } from '../../services/authService';
 const getApiMessage = (error: any, fallback: string) => {
   const responseData = error?.response?.data;
   return typeof responseData === 'string' ? responseData : responseData?.message || fallback;
+};
+
+const splitName = (name?: string) => {
+  const trimmed = (name || '').trim();
+  if (!trimmed) {
+    return { firstName: '', lastName: '' };
+  }
+
+  const parts = trimmed.split(/\s+/);
+  return {
+    firstName: parts[0] || '',
+    lastName: parts.slice(1).join(' '),
+  };
+};
+
+const joinName = (firstName: string, lastName: string) => {
+  return [firstName.trim(), lastName.trim()].filter(Boolean).join(' ');
 };
 
 const getInitials = (name?: string) => {
@@ -48,13 +70,15 @@ const isStrongEnough = (password: string) => {
 const Profile: React.FC = () => {
   const { user, logout, refreshUser } = useAuth();
   const navigate = useNavigate();
-  const [name, setName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
   const [avatarSaving, setAvatarSaving] = useState(false);
   const [profileMessage, setProfileMessage] = useState('');
   const [profileError, setProfileError] = useState('');
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -62,12 +86,15 @@ const Profile: React.FC = () => {
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
-    setName(user?.name || '');
+    const nextName = splitName(user?.name);
+    setFirstName(nextName.firstName);
+    setLastName(nextName.lastName);
     setPhone(user?.phone || '');
     setAvatarUrl(user?.avatar_url || '');
   }, [user]);
@@ -89,10 +116,18 @@ const Profile: React.FC = () => {
     };
   }, [profileMessage, profileError, passwordMessage, passwordError]);
 
-  const savedName = user?.name?.trim() || '';
-  const savedPhone = user?.phone?.trim() || '';
-  const profileDisplayName = savedName || 'Spectron User';
-  const initials = useMemo(() => getInitials(savedName), [savedName]);
+  const fullName = joinName(firstName, lastName);
+  const profileDisplayName = fullName || user?.email || 'Spectron User';
+  const initials = useMemo(() => getInitials(profileDisplayName), [profileDisplayName]);
+  const accountRole = user?.accounts?.[0]?.role || 'Free';
+  const email = user?.email || '';
+  const username = email ? `@${email.split('@')[0]}` : `@${profileDisplayName.replace(/\s+/g, '')}`;
+  const profileUrl = useMemo(() => {
+    if (typeof window === 'undefined') {
+      return '';
+    }
+    return `${window.location.origin}/profile`;
+  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -106,7 +141,7 @@ const Profile: React.FC = () => {
 
     try {
       await updateProfile({
-        name: name.trim(),
+        name: fullName,
         phone: phone.trim(),
         avatar_url: nextAvatarUrl,
       });
@@ -156,14 +191,35 @@ const Profile: React.FC = () => {
     saveAvatar('');
   };
 
+  const handleCopyProfileLink = async () => {
+    if (!profileUrl) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(profileUrl);
+      setLinkCopied(true);
+      setProfileMessage('Profile link copied.');
+      window.setTimeout(() => setLinkCopied(false), 1800);
+    } catch (error) {
+      setProfileError('Could not copy profile link.');
+    }
+  };
+
   const handleSaveProfile = async () => {
     setProfileMessage('');
     setProfileError('');
+
+    if (!firstName.trim()) {
+      setProfileError('Enter your first name.');
+      return;
+    }
+
     setProfileSaving(true);
 
     try {
       await updateProfile({
-        name: name.trim(),
+        name: fullName,
         phone: phone.trim(),
         avatar_url: avatarUrl,
       });
@@ -204,6 +260,7 @@ const Profile: React.FC = () => {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      setShowPasswordForm(false);
       setPasswordMessage('Password updated successfully.');
     } catch (error: any) {
       setPasswordError(getApiMessage(error, 'Failed to update password.'));
@@ -232,215 +289,297 @@ const Profile: React.FC = () => {
 
   return (
     <Container maxWidth="lg" sx={{ py: { xs: 2, md: 3 } }}>
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="overline" color="secondary" fontWeight={800}>
-          Account
-        </Typography>
-        <Typography variant="h4">Profile</Typography>
-        <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-          Manage your profile details, avatar, and password.
-        </Typography>
-      </Box>
-
-      <Grid container spacing={2.5}>
-        <Grid item xs={12} md={5}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
-              <Stack alignItems="center" textAlign="center" spacing={2}>
-                <Avatar
-                  src={avatarUrl || undefined}
-                  sx={{
-                    width: 120,
-                    height: 120,
-                    bgcolor: 'primary.dark',
-                    fontSize: 38,
-                    fontWeight: 800,
-                    border: '6px solid #faf0ea',
-                    boxShadow: 'none',
-                  }}
-                >
-                  {initials}
-                </Avatar>
-                <Box>
-                  <Typography variant="h5">{profileDisplayName}</Typography>
-                  {savedName && user?.email && (
-                    <Typography variant="body2" color="text.secondary">
-                      {user.email}
-                    </Typography>
-                  )}
-                  {savedPhone && (
-                    <Typography variant="body2" color="text.secondary">
-                      {savedPhone}
-                    </Typography>
-                  )}
-                </Box>
-                <Button
-                  variant="outlined"
-                  component="label"
-                  startIcon={<PhotoCamera />}
-                  disabled={avatarSaving || profileSaving}
-                >
-                  {avatarSaving ? 'Saving Picture...' : 'Upload Picture'}
-                  <input hidden accept="image/*" type="file" onChange={handleAvatarUpload} />
-                </Button>
-                {avatarUrl && (
-                  <Button
-                    size="small"
-                    color="secondary"
-                    onClick={handleRemoveAvatar}
-                    disabled={avatarSaving || profileSaving}
+      <Stack spacing={2.5}>
+        <Card>
+          <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
+            <Stack
+              direction={{ xs: 'column', md: 'row' }}
+              spacing={{ xs: 2.5, md: 3.5 }}
+              alignItems={{ xs: 'flex-start', md: 'center' }}
+              justifyContent="space-between"
+            >
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2.5} alignItems={{ xs: 'center', sm: 'center' }}>
+                <Box sx={{ position: 'relative' }}>
+                  <Avatar
+                    src={avatarUrl || undefined}
+                    sx={{
+                      width: { xs: 112, md: 136 },
+                      height: { xs: 112, md: 136 },
+                      bgcolor: 'primary.dark',
+                      fontSize: { xs: 34, md: 42 },
+                      fontWeight: 800,
+                      border: '6px solid #faf0ea',
+                      boxShadow: 'none',
+                    }}
                   >
-                    Remove Picture
-                  </Button>
-                )}
+                    {initials}
+                  </Avatar>
+                  <Stack
+                    direction="row"
+                    spacing={0.5}
+                    sx={{
+                      position: 'absolute',
+                      right: 4,
+                      bottom: 4,
+                      bgcolor: 'background.paper',
+                      border: '1px solid rgba(60, 57, 17, 0.12)',
+                      borderRadius: 999,
+                      p: 0.25,
+                    }}
+                  >
+                    {avatarUrl && (
+                      <Tooltip title="Remove picture">
+                        <span>
+                          <IconButton
+                            aria-label="Remove profile picture"
+                            size="small"
+                            color="error"
+                            onClick={handleRemoveAvatar}
+                            disabled={avatarSaving || profileSaving}
+                          >
+                            <DeleteOutline fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    )}
+                    <Tooltip title="Upload picture">
+                      <IconButton
+                        aria-label="Upload profile picture"
+                        size="small"
+                        component="label"
+                        disabled={avatarSaving || profileSaving}
+                      >
+                        <PhotoCamera fontSize="small" />
+                        <input hidden accept="image/*" type="file" onChange={handleAvatarUpload} />
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
+                </Box>
+
+                <Box sx={{ textAlign: { xs: 'center', sm: 'left' } }}>
+                  <Stack
+                    direction={{ xs: 'column', sm: 'row' }}
+                    spacing={1.25}
+                    alignItems={{ xs: 'center', sm: 'center' }}
+                  >
+                    <Typography variant="h4">{profileDisplayName}</Typography>
+                    <Chip label={accountRole} color="primary" variant="outlined" size="small" />
+                  </Stack>
+                  <Typography variant="subtitle1" sx={{ mt: 1 }}>
+                    {username}
+                  </Typography>
+                  <Stack
+                    direction={{ xs: 'column', sm: 'row' }}
+                    spacing={1}
+                    alignItems={{ xs: 'center', sm: 'center' }}
+                    sx={{ mt: 1 }}
+                  >
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ fontStyle: 'italic', wordBreak: 'break-all' }}
+                    >
+                      {profileUrl}
+                    </Typography>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<ContentCopy />}
+                      onClick={handleCopyProfileLink}
+                    >
+                      {linkCopied ? 'Copied' : 'Copy link'}
+                    </Button>
+                  </Stack>
+                </Box>
               </Stack>
 
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ width: { xs: '100%', md: 'auto' } }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<Logout />}
+                  onClick={handleLogout}
+                  sx={{ minWidth: 132 }}
+                >
+                  Logout
+                </Button>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<Save />}
+                  onClick={handleSaveProfile}
+                  disabled={profileSaving || avatarSaving}
+                  sx={{ minWidth: 154 }}
+                >
+                  {profileSaving ? 'Saving...' : 'Save changes'}
+                </Button>
+              </Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
+            <Typography variant="h5">Account information</Typography>
+            <Divider sx={{ my: 2.5 }} />
+
+            <Collapse in={Boolean(profileMessage || profileError)} timeout={300} unmountOnExit>
+              <Alert severity={profileError ? 'error' : 'success'} sx={{ mb: 2.5 }}>
+                {profileError || profileMessage}
+              </Alert>
+            </Collapse>
+
+            <Grid container spacing={2.5}>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  required
+                  label="First Name"
+                  placeholder="First name"
+                  value={firstName}
+                  onChange={(event) => setFirstName(event.target.value)}
+                  disabled={profileSaving}
+                  helperText="The name entered here appears across your Spectron workspace."
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Last Name"
+                  placeholder="Last name"
+                  value={lastName}
+                  onChange={(event) => setLastName(event.target.value)}
+                  disabled={profileSaving}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField fullWidth label="Email" value={email} disabled />
+              </Grid>
+              <Grid item xs={12}>
+                <Alert severity="info">Email is managed by your Spectron account.</Alert>
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Phone"
+                  placeholder="+94 77 123 4567"
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                  disabled={profileSaving}
+                />
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
+            <Typography variant="h5">Password</Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 2 }}>
               <Button
                 variant="outlined"
-                color="error"
-                startIcon={<Logout />}
-                onClick={handleLogout}
-                sx={{ mt: 4 }}
-                fullWidth
+                startIcon={<LockReset />}
+                onClick={() => setShowPasswordForm((current) => !current)}
               >
-                Logout
+                Reset password
               </Button>
-            </CardContent>
-          </Card>
-        </Grid>
+            </Stack>
 
-        <Grid item xs={12} md={7}>
-          <Stack spacing={2.5}>
-            <Card>
-              <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
-                <Typography variant="h5">Edit Profile Details</Typography>
-                <Typography color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
-                  Update the personal details shown across your Spectron workspace.
+            <Collapse in={Boolean(passwordMessage || passwordError)} timeout={300} unmountOnExit>
+              <Alert severity={passwordError ? 'error' : 'success'} sx={{ mt: 2.5 }}>
+                {passwordError || passwordMessage}
+              </Alert>
+            </Collapse>
+
+            <Collapse in={showPasswordForm} timeout={300} unmountOnExit>
+              <Stack spacing={2} sx={{ mt: 2.5 }}>
+                <Typography color="text.secondary">
+                  Use at least 8 characters with a letter and a number.
                 </Typography>
-
-                <Collapse in={Boolean(profileMessage || profileError)} timeout={300} unmountOnExit>
-                  <Alert severity={profileError ? 'error' : 'success'} sx={{ mb: 2 }}>
-                    {profileError || profileMessage}
-                  </Alert>
-                </Collapse>
-
+                <TextField
+                  fullWidth
+                  label="Current Password"
+                  type={showCurrentPassword ? 'text' : 'password'}
+                  placeholder="Enter current password"
+                  value={currentPassword}
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                  disabled={passwordSaving}
+                  InputProps={{
+                    endAdornment: passwordAdornment(
+                      showCurrentPassword,
+                      setShowCurrentPassword,
+                      'Show current password',
+                      'Hide current password'
+                    ),
+                  }}
+                />
                 <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6}>
+                  <Grid item xs={12} md={6}>
                     <TextField
                       fullWidth
-                      label="Name"
-                      placeholder="Your full name"
-                      value={name}
-                      onChange={(event) => setName(event.target.value)}
-                      disabled={profileSaving}
+                      label="New Password"
+                      type={showNewPassword ? 'text' : 'password'}
+                      placeholder="Enter new password"
+                      value={newPassword}
+                      onChange={(event) => setNewPassword(event.target.value)}
+                      disabled={passwordSaving}
+                      InputProps={{
+                        endAdornment: passwordAdornment(
+                          showNewPassword,
+                          setShowNewPassword,
+                          'Show new password',
+                          'Hide new password'
+                        ),
+                      }}
                     />
                   </Grid>
-                  <Grid item xs={12} sm={6}>
+                  <Grid item xs={12} md={6}>
                     <TextField
                       fullWidth
-                      label="Phone"
-                      placeholder="+94 77 123 4567"
-                      value={phone}
-                      onChange={(event) => setPhone(event.target.value)}
-                      disabled={profileSaving}
+                      label="Confirm New Password"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      placeholder="Re-enter new password"
+                      value={confirmPassword}
+                      onChange={(event) => setConfirmPassword(event.target.value)}
+                      disabled={passwordSaving}
+                      InputProps={{
+                        endAdornment: passwordAdornment(
+                          showConfirmPassword,
+                          setShowConfirmPassword,
+                          'Show confirm password',
+                          'Hide confirm password'
+                        ),
+                      }}
                     />
                   </Grid>
                 </Grid>
-
-                <Button
-                  variant="contained"
-                  color="secondary"
-                  startIcon={<Save />}
-                  onClick={handleSaveProfile}
-                  disabled={profileSaving}
-                  sx={{ mt: 2.5 }}
-                >
-                  {profileSaving ? 'Saving...' : 'Save Profile'}
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
-                <Typography variant="h5">Update Password</Typography>
-                <Typography color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
-                  Use at least 8 characters with a letter and a number.
-                </Typography>
-
-                <Collapse in={Boolean(passwordMessage || passwordError)} timeout={300} unmountOnExit>
-                  <Alert severity={passwordError ? 'error' : 'success'} sx={{ mb: 2 }}>
-                    {passwordError || passwordMessage}
-                  </Alert>
-                </Collapse>
-
-                <Stack spacing={2}>
-                  <TextField
-                    fullWidth
-                    label="Current Password"
-                    type={showCurrentPassword ? 'text' : 'password'}
-                    placeholder="Enter current password"
-                    value={currentPassword}
-                    onChange={(event) => setCurrentPassword(event.target.value)}
-                    disabled={passwordSaving}
-                    InputProps={{
-                      endAdornment: passwordAdornment(
-                        showCurrentPassword,
-                        setShowCurrentPassword,
-                        'Show current password',
-                        'Hide current password'
-                      ),
-                    }}
-                  />
-                  <TextField
-                    fullWidth
-                    label="New Password"
-                    type={showNewPassword ? 'text' : 'password'}
-                    placeholder="Enter new password"
-                    value={newPassword}
-                    onChange={(event) => setNewPassword(event.target.value)}
-                    disabled={passwordSaving}
-                    InputProps={{
-                      endAdornment: passwordAdornment(
-                        showNewPassword,
-                        setShowNewPassword,
-                        'Show new password',
-                        'Hide new password'
-                      ),
-                    }}
-                  />
-                  <TextField
-                    fullWidth
-                    label="Confirm New Password"
-                    type={showConfirmPassword ? 'text' : 'password'}
-                    placeholder="Re-enter new password"
-                    value={confirmPassword}
-                    onChange={(event) => setConfirmPassword(event.target.value)}
-                    disabled={passwordSaving}
-                    InputProps={{
-                      endAdornment: passwordAdornment(
-                        showConfirmPassword,
-                        setShowConfirmPassword,
-                        'Show confirm password',
-                        'Hide confirm password'
-                      ),
-                    }}
-                  />
-                </Stack>
-
                 <Button
                   variant="contained"
                   startIcon={<LockReset />}
                   onClick={handleChangePassword}
                   disabled={passwordSaving}
-                  sx={{ mt: 2.5 }}
+                  sx={{ alignSelf: { xs: 'stretch', sm: 'flex-start' } }}
                 >
                   {passwordSaving ? 'Updating...' : 'Update Password'}
                 </Button>
-              </CardContent>
-            </Card>
-          </Stack>
-        </Grid>
-      </Grid>
+              </Stack>
+            </Collapse>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
+            <Typography variant="h5" color="error.main">
+              Delete Account
+            </Typography>
+            <Typography color="text.secondary" sx={{ mt: 0.75, mb: 2 }}>
+              Account deletion is not available in this build yet.
+            </Typography>
+            <Button variant="outlined" color="error" startIcon={<DeleteOutline />} disabled>
+              Delete My Account
+            </Button>
+          </CardContent>
+        </Card>
+      </Stack>
     </Container>
   );
 };
