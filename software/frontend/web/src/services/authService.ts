@@ -114,6 +114,10 @@ export interface ChangePasswordRequest {
   new_password: string;
 }
 
+export interface DeleteAccountRequest {
+  confirm_email: string;
+}
+
 export const updateProfile = async (data: UpdateProfileRequest): Promise<User> => {
   const response = await api.patch<User>(API_ENDPOINTS.AUTH.ME, data);
   return normalizeUser(response.data);
@@ -121,4 +125,9 @@ export const updateProfile = async (data: UpdateProfileRequest): Promise<User> =
 
 export const changePassword = async (data: ChangePasswordRequest): Promise<void> => {
   await api.post(API_ENDPOINTS.AUTH.CHANGE_PASSWORD, data);
+};
+
+export const deleteAccount = async (data: DeleteAccountRequest): Promise<void> => {
+  await api.delete(API_ENDPOINTS.AUTH.ME, { data });
+  removeToken();
 };

@@ -58,6 +58,10 @@ type ChangePasswordRequest struct {
 	NewPassword     string `json:"new_password"`
 }
 
+type DeleteAccountRequest struct {
+	ConfirmEmail string `json:"confirm_email"`
+}
+
 type CurrentUserAccountAccess struct {
 	ID   uuid.UUID `json:"id"`
 	Name string    `json:"name"`
@@ -347,6 +351,122 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(map[string]string{
 		"status": "password_updated",
+	})
+}
+
+func (h *AuthHandler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
+	userID := GetUserID(r).(uuid.UUID)
+	accountID := GetAccountID(r).(uuid.UUID)
+
+	var req DeleteAccountRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+
+	var email string
+	var role string
+	err := h.db.QueryRow(r.Context(), `
+		SELECT u.email, am.role
+		FROM users u
+		JOIN account_memberships am ON u.id = am.user_id
+		WHERE u.id = $1 AND am.account_id = $2
+	`, userID, accountID).Scan(&email, &role)
+	if err != nil {
+		http.Error(w, "account not found", http.StatusNotFound)
+		return
+	}
+
+	if role != "OWNER" {
+		http.Error(w, "only account owners can delete an account", http.StatusForbidden)
+		return
+	}
+
+	if !strings.EqualFold(strings.TrimSpace(req.ConfirmEmail), email) {
+		http.Error(w, "confirmation email does not match", http.StatusBadRequest)
+		return
+	}
+
+	tx, err := h.db.Begin(r.Context())
+	if err != nil {
+		http.Error(w, "database error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	// The schema does not use ON DELETE CASCADE, so remove account-owned data
+	// from leaf tables first to avoid foreign-key violations.
+	deletes := []string{
+		`DELETE FROM pairing_tokens
+		 WHERE issued_for_account_id = $1
+		    OR controller_id IN (SELECT id FROM controllers WHERE account_id = $1)`,
+		`DELETE FROM sensor_group_members
+		 WHERE group_id IN (
+		     SELECT sg.id
+		     FROM sensor_groups sg
+		     JOIN controllers c ON sg.controller_id = c.id
+		     WHERE c.account_id = $1
+		 )
+		    OR sensor_id IN (
+		     SELECT s.id
+		     FROM sensors s
+		     JOIN controllers c ON s.controller_id = c.id
+		     WHERE c.account_id = $1
+		 )`,
+		`DELETE FROM sensor_readings
+		 WHERE sensor_id IN (
+		     SELECT s.id
+		     FROM sensors s
+		     JOIN controllers c ON s.controller_id = c.id
+		     WHERE c.account_id = $1
+		 )`,
+		`DELETE FROM sensor_configs
+		 WHERE sensor_id IN (
+		     SELECT s.id
+		     FROM sensors s
+		     JOIN controllers c ON s.controller_id = c.id
+		     WHERE c.account_id = $1
+		 )`,
+		`DELETE FROM alerts WHERE account_id = $1`,
+		`DELETE FROM sensor_groups
+		 WHERE controller_id IN (SELECT id FROM controllers WHERE account_id = $1)`,
+		`DELETE FROM sensors
+		 WHERE controller_id IN (SELECT id FROM controllers WHERE account_id = $1)`,
+		`DELETE FROM controller_configs
+		 WHERE controller_id IN (SELECT id FROM controllers WHERE account_id = $1)`,
+		`DELETE FROM controllers WHERE account_id = $1`,
+		`DELETE FROM account_memberships WHERE account_id = $1`,
+		`DELETE FROM accounts WHERE id = $1`,
+	}
+
+	for _, query := range deletes {
+		if _, err := tx.Exec(r.Context(), query, accountID); err != nil {
+			log.Printf("Failed to delete account data: %v", err)
+			http.Error(w, "failed to delete account", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if _, err := tx.Exec(r.Context(), `DELETE FROM account_memberships WHERE user_id = $1`, userID); err != nil {
+		log.Printf("Failed to delete user memberships: %v", err)
+		http.Error(w, "failed to delete account", http.StatusInternalServerError)
+		return
+	}
+
+	if _, err := tx.Exec(r.Context(), `DELETE FROM users WHERE id = $1`, userID); err != nil {
+		log.Printf("Failed to delete user: %v", err)
+		http.Error(w, "failed to delete account", http.StatusInternalServerError)
+		return
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		log.Printf("Failed to commit account deletion: %v", err)
+		http.Error(w, "failed to delete account", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": "account_deleted",
 	})
 }
 

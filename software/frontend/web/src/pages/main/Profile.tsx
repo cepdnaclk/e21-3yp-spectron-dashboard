@@ -18,6 +18,10 @@ import {
   Divider,
   Chip,
   Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import {
   Logout,
@@ -30,7 +34,7 @@ import {
   DeleteOutline,
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
-import { changePassword, updateProfile } from '../../services/authService';
+import { changePassword, deleteAccount, updateProfile } from '../../services/authService';
 
 const getApiMessage = (error: any, fallback: string) => {
   const responseData = error?.response?.data;
@@ -79,6 +83,10 @@ const Profile: React.FC = () => {
   const [profileMessage, setProfileMessage] = useState('');
   const [profileError, setProfileError] = useState('');
   const [linkCopied, setLinkCopied] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteConfirmEmail, setDeleteConfirmEmail] = useState('');
+  const [deleteSaving, setDeleteSaving] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -122,6 +130,7 @@ const Profile: React.FC = () => {
   const accountRole = user?.accounts?.[0]?.role || 'Free';
   const email = user?.email || '';
   const username = email ? `@${email.split('@')[0]}` : `@${profileDisplayName.replace(/\s+/g, '')}`;
+  const canConfirmDeletion = Boolean(email) && deleteConfirmEmail.trim().toLowerCase() === email.toLowerCase();
   const profileUrl = useMemo(() => {
     if (typeof window === 'undefined') {
       return '';
@@ -266,6 +275,42 @@ const Profile: React.FC = () => {
       setPasswordError(getApiMessage(error, 'Failed to update password.'));
     } finally {
       setPasswordSaving(false);
+    }
+  };
+
+  const openDeleteDialog = () => {
+    setDeleteConfirmEmail('');
+    setDeleteError('');
+    setDeleteDialogOpen(true);
+  };
+
+  const closeDeleteDialog = () => {
+    if (deleteSaving) {
+      return;
+    }
+
+    setDeleteDialogOpen(false);
+    setDeleteConfirmEmail('');
+    setDeleteError('');
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleteError('');
+
+    if (!canConfirmDeletion) {
+      setDeleteError('Type your email address to confirm account deletion.');
+      return;
+    }
+
+    setDeleteSaving(true);
+    try {
+      await deleteAccount({ confirm_email: deleteConfirmEmail.trim() });
+      await logout();
+      navigate('/signin');
+    } catch (error: any) {
+      setDeleteError(getApiMessage(error, 'Failed to delete account.'));
+    } finally {
+      setDeleteSaving(false);
     }
   };
 
@@ -572,14 +617,62 @@ const Profile: React.FC = () => {
               Delete Account
             </Typography>
             <Typography color="text.secondary" sx={{ mt: 0.75, mb: 2 }}>
-              Account deletion is not available in this build yet.
+              Permanently delete your account, controllers, sensors, readings, and alerts.
             </Typography>
-            <Button variant="outlined" color="error" startIcon={<DeleteOutline />} disabled>
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<DeleteOutline />}
+              onClick={openDeleteDialog}
+              disabled={deleteSaving}
+            >
               Delete My Account
             </Button>
           </CardContent>
         </Card>
       </Stack>
+
+      <Dialog open={deleteDialogOpen} onClose={closeDeleteDialog} fullWidth maxWidth="sm">
+        <DialogTitle>Delete Account</DialogTitle>
+        <DialogContent>
+          <Typography color="text.secondary" sx={{ mb: 2 }}>
+            This action permanently removes your account and workspace data. Type your email address to confirm.
+          </Typography>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            This cannot be undone.
+          </Alert>
+          <TextField
+            fullWidth
+            label="Confirm Email"
+            placeholder={email}
+            value={deleteConfirmEmail}
+            onChange={(event) => {
+              setDeleteConfirmEmail(event.target.value);
+              setDeleteError('');
+            }}
+            disabled={deleteSaving}
+          />
+          <Collapse in={Boolean(deleteError)} timeout={300} unmountOnExit>
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {deleteError}
+            </Alert>
+          </Collapse>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button variant="outlined" onClick={closeDeleteDialog} disabled={deleteSaving}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            startIcon={<DeleteOutline />}
+            onClick={handleDeleteAccount}
+            disabled={deleteSaving || !canConfirmDeletion}
+          >
+            {deleteSaving ? 'Deleting...' : 'Delete My Account'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };
