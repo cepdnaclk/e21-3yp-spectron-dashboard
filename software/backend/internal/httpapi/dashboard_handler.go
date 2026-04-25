@@ -258,7 +258,7 @@ func (h *DashboardHandler) GetReadings(w http.ResponseWriter, r *http.Request) {
 			Meta  map[string]interface{} `json:"meta,omitempty"`
 		}
 
-		var readings []Reading
+		readings := make([]Reading, 0)
 		for rows.Next() {
 			var r Reading
 			var metaJSON []byte

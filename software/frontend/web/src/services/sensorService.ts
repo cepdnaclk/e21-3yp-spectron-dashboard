@@ -157,8 +157,8 @@ export const getSensorReadings = async (
     interval?: string;
   }
 ): Promise<SensorReading[]> => {
-  const response = await api.get<SensorReading[]>(API_ENDPOINTS.READINGS.GET(sensorId), {
+  const response = await api.get<SensorReading[] | null>(API_ENDPOINTS.READINGS.GET(sensorId), {
     params,
   });
-  return response.data;
+  return Array.isArray(response.data) ? response.data : [];
 };
