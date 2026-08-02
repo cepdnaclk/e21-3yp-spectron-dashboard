@@ -145,24 +145,12 @@ const AdminAddDevice: React.FC = () => {
             textAlign: 'center',
           }}
         >
-          <Box
-            component="img"
-            src="/assets/spectron-logo-full.svg"
-            alt="Spectron"
-            sx={{ height: '8mm', width: 'auto', display: 'block' }}
-          />
           <QRCodeSVG
             value={qrPayload}
             size={120}
             bgColor="#ffffff"
             fgColor="#262411"
             includeMargin
-            imageSettings={{
-              src: '/assets/spectron-logo.svg',
-              height: 24,
-              width: 24,
-              excavate: true,
-            }}
           />
           <Typography sx={{ fontSize: '11pt', fontWeight: 900, letterSpacing: 0.5, lineHeight: 1.1 }}>
             {created.device.controllerId}
@@ -216,12 +204,6 @@ const AdminAddDevice: React.FC = () => {
                     bgColor="#fffaf4"
                     fgColor="#262411"
                     includeMargin
-                    imageSettings={{
-                      src: '/assets/spectron-logo.svg',
-                      height: 44,
-                      width: 44,
-                      excavate: true,
-                    }}
                   />
                 </Box>
 

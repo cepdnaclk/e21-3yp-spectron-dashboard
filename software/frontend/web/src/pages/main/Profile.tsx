@@ -141,7 +141,6 @@ const Profile: React.FC = () => {
   const accountRole = user?.accounts?.[0]?.role || 'Free';
   const accountLabel = accountRole === 'OWNER' ? 'Farm Owner' : accountRole === 'VIEWER' ? 'Viewer' : accountRole;
   const email = user?.email || '';
-  const username = email ? `@${email.split('@')[0]}` : `@${profileDisplayName.replace(/\s+/g, '')}`;
   const canConfirmDeletion = Boolean(email) && deleteConfirmEmail.trim().toLowerCase() === email.toLowerCase();
 
   const handleLogout = async () => {
@@ -327,10 +326,9 @@ const Profile: React.FC = () => {
     <Container maxWidth="lg" sx={{ py: { xs: 2, md: 3 } }}>
       <PageShell>
       <PageHeaderPanel
-        title={profileDisplayName}
-        subtitle={`${accountLabel} account`}
+        title="Profile"
+        subtitle="Your personal details and account security."
         icon={<Avatar src={avatarUrl || undefined} sx={{ width: 28, height: 28, bgcolor: 'primary.dark' }}>{initials}</Avatar>}
-        info="Manage your profile details, password, and account access."
       />
       <Stack spacing={2.5}>
         <Card>
@@ -405,12 +403,10 @@ const Profile: React.FC = () => {
                     spacing={1.25}
                     alignItems={{ xs: 'center', sm: 'center' }}
                   >
-                    <Typography variant="h4">{profileDisplayName}</Typography>
+                    <Typography variant="h4">{fullName || email}</Typography>
                       <Chip label={accountLabel} color="primary" variant="outlined" size="small" />
                   </Stack>
-                  <Typography variant="subtitle1" sx={{ mt: 1 }}>
-                    {username}
-                  </Typography>
+                  {fullName && <Typography variant="subtitle1" color="text.secondary" sx={{ mt: 0.75 }}>{email}</Typography>}
                 </Box>
               </Stack>
 
@@ -461,12 +457,6 @@ const Profile: React.FC = () => {
                   onChange={(event) => setLastName(event.target.value)}
                   disabled={profileSaving}
                 />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField fullWidth label="Email" value={email} disabled />
-              </Grid>
-              <Grid item xs={12}>
-                <Alert severity="info">Email belongs to your Spectron account.</Alert>
               </Grid>
               <Grid item xs={12}>
                 <TextField

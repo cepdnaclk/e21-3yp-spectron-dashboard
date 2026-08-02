@@ -18,8 +18,8 @@ func TestGroqAISuggestionIntegration(t *testing.T) {
 	if err != nil {
 		t.Logf("Warning: Could not load .env from %s: %v", envPath, err)
 	}
-	if os.Getenv("OPENAI_API_KEY") == "" && os.Getenv("AI_API_KEY") == "" && os.Getenv("GEMINI_API_KEY") == "" && os.Getenv("OPENROUTER_API_KEY") == "" {
-		t.Skip("set OPENAI_API_KEY, AI_API_KEY, GEMINI_API_KEY, or OPENROUTER_API_KEY to run hosted AI integration test")
+	if os.Getenv("GROQ_API_KEY") == "" && os.Getenv("GEMINI_API_KEY") == "" {
+		t.Skip("set GROQ_API_KEY or GEMINI_API_KEY to run hosted AI integration test")
 	}
 
 	handler := &SensorHandler{db: nil}
@@ -88,49 +88,41 @@ func TestGroqAISuggestionIntegration(t *testing.T) {
 	})
 }
 
-func TestOpenRouterEnvironmentSelection(t *testing.T) {
+func TestGroqEnvironmentSelection(t *testing.T) {
 	t.Setenv("AI_PROVIDER", "")
-	t.Setenv("OPENROUTER_API_KEY", "test-openrouter-key")
-	t.Setenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
-	t.Setenv("OPENROUTER_API_BASE_URL", "")
-	t.Setenv("OPENAI_API_KEY", "test-openai-key")
+	t.Setenv("GROQ_API_KEY", "test-groq-key")
+	t.Setenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+	t.Setenv("GROQ_BASE_URL", "")
+	t.Setenv("OPENROUTER_API_KEY", "")
+	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("AI_API_KEY", "")
-	t.Setenv("AI_MODEL", "")
-	t.Setenv("OPENAI_MODEL", "")
-	t.Setenv("AI_API_BASE_URL", "")
-	t.Setenv("OPENAI_API_BASE_URL", "")
 
-	if provider := configuredAIProvider(); provider != "openrouter" {
-		t.Fatalf("configuredAIProvider() = %q, want openrouter", provider)
+	if provider := configuredAIProvider(); provider != "groq" {
+		t.Fatalf("configuredAIProvider() = %q, want groq", provider)
 	}
-	if apiKey := openAICompatibleAPIKey("openrouter"); apiKey != "test-openrouter-key" {
-		t.Fatalf("openAICompatibleAPIKey(openrouter) = %q", apiKey)
+	if apiKey := openAICompatibleAPIKey("groq"); apiKey != "test-groq-key" {
+		t.Fatalf("openAICompatibleAPIKey(groq) = %q", apiKey)
 	}
-	if model := openAICompatibleModel("openrouter"); model != "openai/gpt-4o-mini" {
-		t.Fatalf("openAICompatibleModel(openrouter) = %q", model)
+	if model := openAICompatibleModel("groq"); model != "llama-3.3-70b-versatile" {
+		t.Fatalf("openAICompatibleModel(groq) = %q", model)
 	}
-	if baseURL := openAICompatibleBaseURL("openrouter"); baseURL != "https://openrouter.ai/api/v1" {
-		t.Fatalf("openAICompatibleBaseURL(openrouter) = %q", baseURL)
+	if baseURL := openAICompatibleBaseURL("groq"); baseURL != "https://api.groq.com/openai/v1" {
+		t.Fatalf("openAICompatibleBaseURL(groq) = %q", baseURL)
 	}
 }
 
-func TestGenericAIAPIKeySelectsOpenRouter(t *testing.T) {
+func TestConfiguredAIProviderDefaultsToGroq(t *testing.T) {
 	t.Setenv("AI_PROVIDER", "")
-	t.Setenv("OPENROUTER_API_KEY", "")
-	t.Setenv("OPENROUTER_MODEL", "")
-	t.Setenv("OPENAI_API_KEY", "")
-	t.Setenv("OPENAI_MODEL", "")
+	t.Setenv("GROQ_API_KEY", "")
+	t.Setenv("GROQ_MODEL", "")
+	t.Setenv("GROQ_BASE_URL", "")
 	t.Setenv("GEMINI_API_KEY", "")
-	t.Setenv("AI_API_KEY", "test-generic-ai-key")
-	t.Setenv("AI_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
-	t.Setenv("AI_API_BASE_URL", "")
-	t.Setenv("OPENAI_API_BASE_URL", "")
+	t.Setenv("OPENROUTER_API_KEY", "")
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("AI_API_KEY", "")
 
-	if provider := configuredAIProvider(); provider != "openrouter" {
-		t.Fatalf("configuredAIProvider() = %q, want openrouter", provider)
-	}
-	if apiKey := openAICompatibleAPIKey("openrouter"); apiKey != "test-generic-ai-key" {
-		t.Fatalf("openAICompatibleAPIKey(openrouter) = %q", apiKey)
+	if provider := configuredAIProvider(); provider != "groq" {
+		t.Fatalf("configuredAIProvider() = %q, want groq", provider)
 	}
 }
 

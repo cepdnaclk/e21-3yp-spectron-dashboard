@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider, createTheme, responsiveFontSizes } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
+import { Capacitor } from '@capacitor/core';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import SignIn from './pages/auth/SignIn';
 import AdminSignIn from './pages/auth/AdminSignIn';
@@ -9,7 +10,8 @@ import SignUp from './pages/auth/SignUp';
 import VerifyEmail from './pages/auth/VerifyEmail';
 import Controllers from './pages/main/Controllers';
 import Farms from './pages/main/Farms';
-import FarmDetails from './pages/main/FarmDetails';
+import FarmOverview from './pages/main/FarmOverview';
+import FarmSettings from './pages/main/FarmSettings';
 import PairController from './pages/main/PairController';
 import ControllerDashboard from './pages/main/ControllerDashboard';
 import SensorConfig from './pages/main/SensorConfig';
@@ -17,6 +19,7 @@ import Monitoring from './pages/main/Monitoring';
 import Alerts from './pages/main/Alerts';
 import Profile from './pages/main/Profile';
 import Team from './pages/main/Team';
+import Advisor from './pages/main/Advisor';
 import Layout from './components/Layout';
 import AdminLayout from './components/AdminLayout';
 import { AuthGateSkeleton } from './components/LoadingSkeletons';
@@ -69,17 +72,24 @@ let theme = createTheme({
   typography: {
     fontFamily:
       '"Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, "Roboto", "Helvetica Neue", Arial, sans-serif',
+    fontSize: 12,
     h4: {
       fontWeight: 800,
       letterSpacing: 0,
+      fontSize: '1.75rem',
+      lineHeight: 1.12,
     },
     h5: {
       fontWeight: 800,
       letterSpacing: 0,
+      fontSize: '1.32rem',
+      lineHeight: 1.18,
     },
     h6: {
       fontWeight: 750,
       letterSpacing: 0,
+      fontSize: '1rem',
+      lineHeight: 1.2,
     },
     button: {
       fontWeight: 750,
@@ -95,19 +105,19 @@ let theme = createTheme({
         },
         '@media (max-width: 599.95px)': {
           '.MuiContainer-root': {
-            paddingLeft: '14px',
-            paddingRight: '14px',
+            paddingLeft: '10px',
+            paddingRight: '10px',
           },
           '.MuiCardContent-root': {
-            padding: '16px',
+            padding: '13px',
           },
           '.MuiTypography-h4': {
-            fontSize: '1.75rem',
+            fontSize: '1.4rem',
             lineHeight: 1.15,
             overflowWrap: 'anywhere',
           },
           '.MuiTypography-h5': {
-            fontSize: '1.35rem',
+            fontSize: '1.12rem',
             lineHeight: 1.2,
             overflowWrap: 'anywhere',
           },
@@ -164,9 +174,9 @@ let theme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: 16,
-          minHeight: 44,
-          paddingLeft: 18,
-          paddingRight: 18,
+          minHeight: 38,
+          paddingLeft: 14,
+          paddingRight: 14,
           whiteSpace: 'normal',
           lineHeight: 1.25,
         },
@@ -236,7 +246,7 @@ let theme = createTheme({
           backgroundColor: '#fffdf8',
         },
         input: {
-          padding: '18px 20px',
+          padding: '14px 16px',
           '&:-webkit-autofill': {
             WebkitBoxShadow: '0 0 0 100px #fffdf8 inset',
             WebkitTextFillColor: '#262411',
@@ -331,8 +341,12 @@ function AppRoutes() {
       >
         <Route index element={<Navigate to="/farms" replace />} />
         <Route path="farms" element={<Farms />} />
-        <Route path="farms/:farmId" element={<FarmDetails />} />
-        <Route path="controllers" element={<Controllers />} />
+        <Route path="farms/:farmId" element={<FarmOverview />} />
+        <Route path="farms/:farmId/manage" element={<FarmSettings />} />
+        <Route path="fields/:fieldId/advisor" element={<Advisor />} />
+        <Route path="hardware" element={<Controllers />} />
+        <Route path="hardware/setup" element={<PairController />} />
+        <Route path="controllers" element={<Navigate to="/hardware" replace />} />
         <Route path="controllers/pair" element={<PairController />} />
         <Route path="controllers/:id" element={<ControllerDashboard />} />
         <Route path="hardware/:controllerId/sensors" element={<ControllerDashboard />} />
@@ -366,7 +380,7 @@ function AppRoutes() {
 }
 
 function App() {
-  const Router = window.location.protocol === 'file:' ? HashRouter : BrowserRouter;
+  const Router = Capacitor.isNativePlatform() || window.location.protocol === 'file:' ? HashRouter : BrowserRouter;
 
   return (
     <ThemeProvider theme={theme}>

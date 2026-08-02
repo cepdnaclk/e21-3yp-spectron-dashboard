@@ -659,12 +659,28 @@ func (p *RawReadingsProcessor) evaluateThresholdAlertWithConfig(ctx context.Cont
 
 	evaluation := evaluateThresholdBreach(input.SensorType, input.Value, config)
 	if !evaluation.Triggered {
+		recovered, err := hasStableThresholdRecovery(ctx, tx, input, config)
+		if err != nil {
+			return err
+		}
+		if recovered {
+			return resolveOpenThresholdAlerts(ctx, tx, input)
+		}
+		return nil
+	}
+
+	sustainedFor := requiredSustainedDuration(config, evaluation)
+	persisted, err := hasPersistentThresholdBreach(ctx, tx, input, config, evaluation, sustainedFor)
+	if err != nil {
+		return err
+	}
+	if !persisted {
 		return nil
 	}
 
 	message := thresholdAlertMessage(input, evaluation)
-	if recommendationMessage, ok := p.recommendationAlertMessage(ctx, tx, input); ok {
-		message = recommendationMessage
+	if recommendationMessage, ok := p.recommendationAlertMessage(ctx, tx, input, evaluation); ok {
+		message = appendRecommendedAction(message, recommendationMessage)
 	}
 	return upsertOpenAlert(
 		ctx,
@@ -684,23 +700,223 @@ func (p *RawReadingsProcessor) evaluateThresholdAlertWithConfig(ctx context.Cont
 	)
 }
 
-func (p *RawReadingsProcessor) recommendationAlertMessage(ctx context.Context, tx pgx.Tx, input thresholdAlertInput) (string, bool) {
+func requiredSustainedDuration(config models.SensorConfig, evaluation thresholdAlertEvaluation) time.Duration {
+	operator := "OUTSIDE_RANGE"
+	if evaluation.Condition == "above" {
+		operator = "GREATER_THAN"
+	} else if evaluation.Condition == "below" {
+		operator = "LESS_THAN"
+	}
+	for _, rule := range config.RecommendationRules {
+		if normalizeMetricKey(rule.MetricType) != normalizeMetricKey(evaluation.Metric) {
+			continue
+		}
+		ruleOperator := strings.ToUpper(strings.TrimSpace(rule.Operator))
+		if ruleOperator != operator && ruleOperator != "OUTSIDE_RANGE" {
+			continue
+		}
+		if rule.SustainedMinutes > 0 {
+			return time.Duration(clampInt(rule.SustainedMinutes, 1, 24*60)) * time.Minute
+		}
+	}
+
+	hardware := config.HardwareConfig
+	if len(hardware) == 0 && config.Hardware != nil {
+		hardware = config.Hardware.Config
+	}
+	if minutes, ok := numericValueFromMap(hardware, "sustainedWindowMinutes"); ok && minutes > 0 {
+		return time.Duration(clampInt(int(math.Round(minutes)), 1, 24*60)) * time.Minute
+	}
+	return 0
+}
+
+func hasPersistentThresholdBreach(
+	ctx context.Context,
+	tx pgx.Tx,
+	input thresholdAlertInput,
+	config models.SensorConfig,
+	expected thresholdAlertEvaluation,
+	required time.Duration,
+) (bool, error) {
+	if required <= 0 {
+		evaluation := evaluateThresholdBreach(input.SensorType, input.Value, config)
+		return evaluation.Triggered && evaluation.Condition == expected.Condition, nil
+	}
+
+	rows, err := tx.Query(ctx, `
+		SELECT time,value
+		FROM sensor_readings
+		WHERE sensor_id=$1
+		  AND time <= $2
+		  AND time >= $2 - ($3::double precision * INTERVAL '1 second') - INTERVAL '24 hours'
+		ORDER BY time DESC
+		LIMIT 500
+	`, input.SensorID, input.ReadingAt, required.Seconds())
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	var newest, oldest time.Time
+	count := 0
+	for rows.Next() {
+		var at time.Time
+		var value float64
+		if err := rows.Scan(&at, &value); err != nil {
+			return false, err
+		}
+		evaluation := evaluateThresholdBreach(input.SensorType, value, config)
+		if !evaluation.Triggered || evaluation.Condition != expected.Condition {
+			break
+		}
+		if count == 0 {
+			newest = at
+		}
+		oldest = at
+		count++
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	return count >= 2 && newest.Sub(oldest) >= required, nil
+}
+
+func hasStableThresholdRecovery(
+	ctx context.Context,
+	tx pgx.Tx,
+	input thresholdAlertInput,
+	config models.SensorConfig,
+) (bool, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT value
+		FROM sensor_readings
+		WHERE sensor_id=$1 AND time <= $2
+		ORDER BY time DESC
+		LIMIT 3
+	`, input.SensorID, input.ReadingAt)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	count := 0
+	for rows.Next() {
+		var value float64
+		if err := rows.Scan(&value); err != nil {
+			return false, err
+		}
+		if evaluateThresholdBreach(input.SensorType, value, config).Triggered {
+			return false, nil
+		}
+		count++
+	}
+	return count >= 3, rows.Err()
+}
+
+func resolveOpenThresholdAlerts(ctx context.Context, tx pgx.Tx, input thresholdAlertInput) error {
+	_, err := tx.Exec(ctx, `
+		UPDATE alerts
+		SET state='resolved',
+		    status='resolved',
+		    last_triggered_at=$4
+		WHERE account_id=$1
+		  AND sensor_id=$2
+		  AND type='THRESHOLD_BREACH'
+		  AND COALESCE(status,'open')='open'
+		  AND controller_id=$3
+	`, input.AccountID, input.SensorID, input.ControllerID, input.ReadingAt)
+	return err
+}
+
+func normalizeMetricKey(metric string) string {
+	switch strings.ToLower(strings.TrimSpace(metric)) {
+	case "temp":
+		return "temperature"
+	case "relative_humidity":
+		return "humidity"
+	default:
+		return strings.ToLower(strings.TrimSpace(metric))
+	}
+}
+
+func clampInt(value, minimum, maximum int) int {
+	if value < minimum {
+		return minimum
+	}
+	if value > maximum {
+		return maximum
+	}
+	return value
+}
+
+func (p *RawReadingsProcessor) recommendationAlertMessage(
+	ctx context.Context,
+	tx pgx.Tx,
+	input thresholdAlertInput,
+	evaluation thresholdAlertEvaluation,
+) (string, bool) {
 	var action string
+	operator := "OUTSIDE_RANGE"
+	if evaluation.Condition == "above" {
+		operator = "GREATER_THAN"
+	} else if evaluation.Condition == "below" {
+		operator = "LESS_THAN"
+	}
 	err := tx.QueryRow(ctx, `
 		SELECT action_recommendation
 		FROM recommendation_rules
 		WHERE account_id = $1
 		  AND active = true
-		ORDER BY created_at DESC
+		  AND (
+		       sensor_id = $2
+		       OR (sensor_id IS NULL AND controller_id = $3)
+		  )
+		  AND lower(metric_type) = lower($4)
+		  AND operator IN ($5, 'OUTSIDE_RANGE')
+		ORDER BY
+		  (sensor_id IS NOT NULL) DESC,
+		  (operator = $5) DESC,
+		  CASE risk_level WHEN 'CRITICAL' THEN 0 WHEN 'MODERATE' THEN 1 ELSE 2 END,
+		  created_at DESC
 		LIMIT 1
-	`, input.AccountID).Scan(&action)
+	`, input.AccountID, input.SensorID, input.ControllerID, evaluation.Metric, operator).Scan(&action)
 	if err != nil {
 		return "", false
 	}
 	if strings.TrimSpace(action) == "" {
 		return "", false
 	}
-	return fmt.Sprintf("Agricultural action required: %s", action), true
+	return safeAutomaticAlertAction(action), true
+}
+
+func safeAutomaticAlertAction(action string) string {
+	action = strings.TrimSpace(action)
+	lower := strings.ToLower(action)
+	for _, unsafe := range []string{
+		"spray ",
+		"apply pesticide",
+		"apply fungicide",
+		"apply insecticide",
+		"apply herbicide",
+		"apply fertilizer",
+		" g/l",
+		" g/lit",
+		" ml/l",
+	} {
+		if strings.Contains(lower, unsafe) {
+			return "Check representative plants and confirm visible symptoms. Do not apply a crop treatment from a sensor warning alone; confirm the correct treatment with a local agricultural officer."
+		}
+	}
+	return action
+}
+
+func appendRecommendedAction(message string, action string) string {
+	message = strings.TrimSpace(message)
+	action = strings.TrimSpace(action)
+	if action == "" || strings.Contains(strings.ToLower(message), strings.ToLower(action)) {
+		return message
+	}
+	return message + " Recommended action: " + action
 }
 
 type distanceAttendanceConfig struct {
@@ -1304,9 +1520,13 @@ func upsertOpenAlert(ctx context.Context, tx pgx.Tx, accountID uuid.UUID, contro
 			    created_at = NOW()
 			WHERE id = $8
 		`, message, systemID, systemSensorID, farmID, fieldID, gatewayID, sensorBaseID, existingID)
-		return err
+		if err != nil {
+			return err
+		}
+		return fanOutFarmAlertRecipients(ctx, tx, existingID, farmID)
 	}
 
+	alertID := uuid.New()
 	_, err = tx.Exec(ctx, `
 		INSERT INTO alerts (
 			id,
@@ -1325,6 +1545,21 @@ func upsertOpenAlert(ctx context.Context, tx pgx.Tx, accountID uuid.UUID, contro
 			created_at
 		)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
-	`, uuid.New(), accountID, controllerID, sensorID, systemID, systemSensorID, farmID, fieldID, gatewayID, sensorBaseID, alertType, severity, message)
+	`, alertID, accountID, controllerID, sensorID, systemID, systemSensorID, farmID, fieldID, gatewayID, sensorBaseID, alertType, severity, message)
+	if err != nil {
+		return err
+	}
+	return fanOutFarmAlertRecipients(ctx, tx, alertID, farmID)
+}
+
+func fanOutFarmAlertRecipients(ctx context.Context, tx pgx.Tx, alertID uuid.UUID, farmID *uuid.UUID) error {
+	if farmID == nil {
+		return nil
+	}
+	_, err := tx.Exec(ctx, `
+		INSERT INTO alert_recipients (alert_id,user_id)
+		SELECT $1,fa.user_id FROM farm_access fa
+		WHERE fa.farm_id=$2 AND fa.revoked_at IS NULL
+		ON CONFLICT (alert_id,user_id) DO NOTHING`, alertID, *farmID)
 	return err
 }

@@ -1,331 +1,411 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useState } from "react";
 import {
+  Alert,
   Box,
   Button,
   Card,
   CardContent,
   Chip,
   Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControl,
-  Grid,
   InputLabel,
   MenuItem,
   Select,
   Stack,
   Typography,
-} from '@mui/material';
-import { Agriculture, DeviceHub, DoneAll, Sensors, SettingsInputAntenna } from '@mui/icons-material';
-import AutoDismissAlert from '../../components/AutoDismissAlert';
-import { ControllersSkeleton } from '../../components/LoadingSkeletons';
-import { EmptyStateCard, MetricCard, PageHeaderPanel, PageShell } from '../../components/ui/PageSurface';
+} from "@mui/material";
+import { Add, Agriculture, Settings, Wifi } from "@mui/icons-material";
+import { useNavigate } from "react-router-dom";
+import { PageHeaderPanel, PageShell } from "../../components/ui/PageSurface";
 import {
+  attachFarmController,
   Farm,
   FarmController,
   getFarmControllers,
   getFarmSensorBases,
   getFarms,
-  getSensorModules,
   SensorBase,
-  SensorModule,
-} from '../../services/farmService';
-import { useRealtimeRefresh } from '../../hooks/useRealtimeRefresh';
+} from "../../services/farmService";
+import { Controller } from "../../services/controllerService";
+import { getMyHardwareControllers } from "../../services/hardwarePairingService";
+import { useRealtimeRefresh } from "../../hooks/useRealtimeRefresh";
 
-type ControllerRow = {
+type HardwareRow = {
   farm: Farm;
-  controller: FarmController;
-  bases: SensorBase[];
-  modulesByBase: Record<string, SensorModule[]>;
+  connection: FarmController;
+  fieldSensors: SensorBase[];
 };
 
-const statusColor = (status?: string) => {
-  const normalized = (status || '').toLowerCase();
-  if (normalized === 'online' || normalized === 'live') {
-    return 'success' as const;
+const simpleStatus = (status?: string) => {
+  const normalized = status?.toLowerCase();
+  if (normalized === "online" || normalized === "live")
+    return { label: "Good", color: "success" as const };
+  if (
+    normalized === "pending_config" ||
+    normalized === "pending_setup" ||
+    normalized === "waiting_setup"
+  ) {
+    return { label: "Waiting setup", color: "warning" as const };
   }
-  if (normalized === 'pending_setup' || normalized === 'waiting_setup') {
-    return 'warning' as const;
-  }
-  if (normalized === 'offline' || normalized === 'error') {
-    return 'error' as const;
-  }
-  return 'default' as const;
-};
-
-const humanize = (value?: string | null) =>
-  (value || 'Unknown').replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
-
-const formatDateTime = (value?: string | null) => {
-  if (!value) {
-    return 'No update';
-  }
-  return new Date(value).toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  if (normalized === "offline")
+    return { label: "Offline", color: "default" as const };
+  return { label: "Needs attention", color: "error" as const };
 };
 
 const Controllers: React.FC = () => {
   const navigate = useNavigate();
-  const location = useLocation();
-  const navigationMessage = (location.state as { message?: string } | null)?.message || '';
+  const [rows, setRows] = useState<HardwareRow[]>([]);
   const [farms, setFarms] = useState<Farm[]>([]);
-  const [rows, setRows] = useState<ControllerRow[]>([]);
-  const [farmFilter, setFarmFilter] = useState('all');
+  const [unassigned, setUnassigned] = useState<Controller[]>([]);
+  const [controllerToLink, setControllerToLink] = useState<Controller | null>(
+    null,
+  );
+  const [selectedFarmId, setSelectedFarmId] = useState("");
+  const [linking, setLinking] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [successMessage, setSuccessMessage] = useState(navigationMessage);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
-  const loadControllers = useCallback(async () => {
+  const load = useCallback(async () => {
     try {
-      setLoading(true);
-      const nextFarms = await getFarms();
-      setFarms(nextFarms);
-      const selectedFarms = farmFilter === 'all' ? nextFarms : nextFarms.filter((farm) => farm.id === farmFilter);
-
-      const nextRows = await Promise.all(
-        selectedFarms.map(async (farm) => {
-          const [controllers, bases] = await Promise.all([
+      setError("");
+      const [nextFarms, ownedControllers] = await Promise.all([
+        getFarms(),
+        // Viewers can see Farm hardware but do not own devices themselves.
+        getMyHardwareControllers().catch(() => []),
+      ]);
+      const results = await Promise.all(
+        nextFarms.map(async (farm) => {
+          const [connections, sensors] = await Promise.all([
             getFarmControllers(farm.id),
             getFarmSensorBases(farm.id),
           ]);
-          const modulePairs = await Promise.all(
-            bases.map(async (base) => [base.id, await getSensorModules(base.id)] as const),
-          );
-          const modulesByBase = Object.fromEntries(modulePairs);
-
-          return controllers.map((controller) => ({
+          return connections.map((connection) => ({
             farm,
-            controller,
-            bases: bases.filter((base) => base.gateway_id === controller.id),
-            modulesByBase,
+            connection,
+            fieldSensors: sensors.filter(
+              (sensor) => sensor.gateway_id === connection.id,
+            ),
           }));
         }),
       );
+      const nextRows = results.flat();
+      const attachedCodes = new Set(
+        nextRows.map(({ connection }) =>
+          connection.serial_number.trim().toUpperCase(),
+        ),
+      );
 
-      setRows(nextRows.flat().sort((a, b) => a.farm.name.localeCompare(b.farm.name)));
-    } catch (err) {
-      console.error(err);
-      setError('Failed to load controllers.');
+      setFarms(nextFarms);
+      setRows(nextRows);
+      setUnassigned(
+        ownedControllers.filter(
+          (controller) =>
+            !attachedCodes.has(
+              (controller.hw_id || controller.id).trim().toUpperCase(),
+            ),
+        ),
+      );
+    } catch {
+      setError("Hardware status could not be loaded.");
     } finally {
       setLoading(false);
     }
-  }, [farmFilter]);
+  }, []);
 
   useEffect(() => {
-    loadControllers();
-  }, [loadControllers]);
-  useRealtimeRefresh('customer', loadControllers);
+    void load();
+  }, [load]);
+  useRealtimeRefresh("customer", load);
 
-  useEffect(() => {
-    if (navigationMessage) {
-      navigate(location.pathname, { replace: true, state: null });
+  const openFarmLink = (controller: Controller) => {
+    const ownerFarms = farms.filter((farm) => farm.role === "owner");
+    if (ownerFarms.length === 0) {
+      navigate("/farms");
+      return;
     }
-  }, [location.pathname, navigate, navigationMessage]);
+    setControllerToLink(controller);
+    setSelectedFarmId(ownerFarms[0].id);
+  };
 
-  const totals = useMemo(
-    () =>
-      rows.reduce(
-        (acc, row) => {
-          const channels = row.bases.reduce(
-            (sum, base) =>
-              sum + (row.modulesByBase[base.id] || []).reduce((moduleSum, module) => moduleSum + module.channels.length, 0),
-            0,
-          );
-          acc.controllers += 1;
-          acc.bases += row.bases.length;
-          acc.channels += channels;
-          if (row.controller.status === 'online') {
-            acc.online += 1;
-          }
-          return acc;
-        },
-        { controllers: 0, bases: 0, channels: 0, online: 0 },
-      ),
-    [rows],
-  );
+  const linkToFarm = async () => {
+    if (!controllerToLink || !selectedFarmId) return;
+    setLinking(true);
+    setError("");
+    try {
+      await attachFarmController(selectedFarmId, {
+        controller_id: controllerToLink.hw_id || controllerToLink.id,
+      });
+      setControllerToLink(null);
+      await load();
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.message ||
+          err?.response?.data ||
+          "Device could not be linked to the Farm.",
+      );
+    } finally {
+      setLinking(false);
+    }
+  };
 
-  if (loading) {
-    return <ControllersSkeleton />;
-  }
+  const hasHardware = rows.length > 0 || unassigned.length > 0;
 
   return (
-    <Container maxWidth="lg" sx={{ py: { xs: 2, md: 3 } }}>
-      <AutoDismissAlert open={Boolean(successMessage)} severity="success" sx={{ mb: 2 }} onCloseAlert={() => setSuccessMessage('')}>
-        {successMessage}
-      </AutoDismissAlert>
-      <AutoDismissAlert open={Boolean(error)} severity="error" sx={{ mb: 2 }} onCloseAlert={() => setError('')}>
-        {error}
-      </AutoDismissAlert>
-
+    <Container maxWidth="md" sx={{ py: { xs: 2, md: 3 } }}>
       <PageShell>
-        <PageHeaderPanel
-          title="Controllers"
-          subtitle="Farm gateways, sensor bases, and channels."
-          icon={<DeviceHub />}
-          info="Controllers belong to farms. Field links come from sensor base assignments."
-          actions={
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} alignItems={{ xs: 'stretch', sm: 'center' }}>
-              <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 220 } }}>
-                <InputLabel id="controller-farm-filter-label">Farm</InputLabel>
-                <Select
-                  labelId="controller-farm-filter-label"
-                  label="Farm"
-                  value={farmFilter}
-                  onChange={(event) => setFarmFilter(event.target.value)}
-                >
-                  <MenuItem value="all">All farms</MenuItem>
-                  {farms.map((farm) => (
-                    <MenuItem key={farm.id} value={farm.id}>
-                      {farm.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+        <Stack spacing={2.5}>
+          <PageHeaderPanel
+            title="Hardware"
+            subtitle="Your devices, Farm links, and sensor status."
+            icon={<Wifi />}
+            actions={
               <Button
                 variant="contained"
-                color="secondary"
-                size="small"
-                sx={{ minHeight: 40, px: 2.25 }}
-                onClick={() => navigate('/farms')}
+                startIcon={<Add />}
+                onClick={() => navigate("/hardware/setup")}
               >
-                Farm Setup
+                Set up hardware
               </Button>
-            </Stack>
-          }
-        />
+            }
+          />
 
-      <Grid container spacing={1.5} sx={{ mb: 2.5 }}>
-        <Grid item xs={6} md={3}>
-          <MetricCard label="Controllers" value={totals.controllers} icon={<DeviceHub fontSize="small" />} />
-        </Grid>
-        <Grid item xs={6} md={3}>
-          <MetricCard label="Online" value={totals.online} icon={<DoneAll fontSize="small" />} tone="success.main" />
-        </Grid>
-        <Grid item xs={6} md={3}>
-          <MetricCard label="Bases" value={totals.bases} icon={<Sensors fontSize="small" />} />
-        </Grid>
-        <Grid item xs={6} md={3}>
-          <MetricCard label="Channels" value={totals.channels} icon={<SettingsInputAntenna fontSize="small" />} tone="info.main" />
-        </Grid>
-      </Grid>
+        {error && <Alert severity="error">{error}</Alert>}
 
-      {farms.length === 0 ? (
-        <EmptyStateCard
-          icon={<Agriculture sx={{ fontSize: 38 }} />}
-          title="No farms"
-          action={
-            <Button
-              variant="contained"
-              color="secondary"
-              size="small"
-              sx={{ mt: 2, minHeight: 40, px: 2.25 }}
-              onClick={() => navigate('/farms')}
-            >
-              Farm Setup
-            </Button>
-          }
-        />
-      ) : rows.length === 0 ? (
-        <EmptyStateCard
-          icon={<DoneAll sx={{ fontSize: 38 }} />}
-          title="No controllers"
-          action={
-            <Button
-              variant="contained"
-              color="secondary"
-              size="small"
-              sx={{ mt: 2, minHeight: 40, px: 2.25 }}
-              onClick={() => navigate('/farms')}
-            >
-              Farm Setup
-            </Button>
-          }
-        />
-      ) : (
-        <Grid container spacing={1.5}>
-          {rows.map(({ farm, controller, bases, modulesByBase }) => {
-            const fieldNames = Array.from(
-              new Set(
-                bases
-                  .map((base) => base.current_assignment?.field_name || base.current_assignment?.monitoring_zone)
-                  .filter(Boolean),
-              ),
-            ) as string[];
-            const channelCount = bases.reduce(
-              (sum, base) =>
-                sum + (modulesByBase[base.id] || []).reduce((moduleSum, module) => moduleSum + module.channels.length, 0),
-              0,
-            );
-
-            return (
-              <Grid item xs={12} md={6} key={controller.id}>
-                <Card
-                  variant="outlined"
-                  sx={{
-                    height: '100%',
-                    bgcolor: 'rgba(255,253,248,0.94)',
-                    boxShadow: '0 12px 28px rgba(60, 57, 17, 0.06)',
-                    transition: 'transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease',
-                    '&:hover': {
-                      borderColor: 'rgba(108,137,48,0.35)',
-                      boxShadow: '0 18px 36px rgba(60, 57, 17, 0.1)',
-                      transform: 'translateY(-2px)',
-                    },
-                  }}
-                >
-                  <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
-                    <Stack direction="row" spacing={1.25} justifyContent="space-between" alignItems="flex-start">
-                      <Stack direction="row" spacing={1.25} sx={{ minWidth: 0 }}>
-                        <Box sx={{ p: 0.75, borderRadius: 1, bgcolor: 'rgba(108, 137, 48, 0.12)', flexShrink: 0 }}>
-                          <DeviceHub color="primary" fontSize="small" />
-                        </Box>
-                        <Box sx={{ minWidth: 0 }}>
-                          <Typography variant="h6" sx={{ overflowWrap: 'anywhere' }}>
-                            {controller.serial_number}
+        {loading ? (
+          <Typography>Loading hardware…</Typography>
+        ) : !hasHardware ? (
+          <Card>
+            <CardContent>
+              <Typography variant="h6">No hardware connected</Typography>
+              <Typography color="text.secondary" sx={{ mb: 2 }}>
+                Connect a device now. You can link it to a Farm later.
+              </Typography>
+              <Button
+                variant="contained"
+                onClick={() => navigate("/hardware/setup")}
+              >
+                Set up hardware
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {unassigned.map((controller) => {
+              const status = simpleStatus(
+                controller.operational_status || controller.status,
+              );
+              return (
+                <Card key={`unassigned-${controller.id}`} variant="outlined">
+                  <CardContent>
+                    <Stack spacing={2}>
+                      <Stack
+                        direction="row"
+                        justifyContent="space-between"
+                        spacing={1}
+                        alignItems="flex-start"
+                      >
+                        <Box>
+                          <Typography variant="h6">
+                            {controller.name ||
+                              controller.hw_id ||
+                              "Farm device"}
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
-                            {farm.name}
+                            Not linked to a Farm
                           </Typography>
                         </Box>
+                        <Chip
+                          icon={<Wifi />}
+                          color={status.color}
+                          label={status.label}
+                        />
                       </Stack>
-                      <Chip size="small" label={humanize(controller.status)} color={statusColor(controller.status)} />
-                    </Stack>
-
-                    <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" sx={{ mt: 1.5 }}>
-                      <Chip size="small" icon={<Sensors />} label={`${bases.length} bases`} />
-                      <Chip size="small" icon={<SettingsInputAntenna />} label={`${channelCount} channels`} />
-                      {controller.model && <Chip size="small" label={controller.model} variant="outlined" />}
-                    </Stack>
-
-                    <Box sx={{ mt: 1.5, pt: 1.5, borderTop: 1, borderColor: 'divider' }}>
-                      <Typography variant="caption" color="text.secondary">Fields</Typography>
-                      <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" sx={{ mt: 0.5 }}>
-                        {fieldNames.length ? (
-                          fieldNames.slice(0, 5).map((name) => <Chip key={name} size="small" label={name} variant="outlined" />)
-                        ) : (
-                          <Chip size="small" label="No field link" variant="outlined" />
-                        )}
-                      </Stack>
-                    </Box>
-
-                    <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="center" sx={{ mt: 1.5 }}>
-                      <Typography variant="caption" color="text.secondary">
-                        {formatDateTime(controller.last_seen)}
+                      <Typography variant="body2" color="text.secondary">
+                        Configure this device now, or link it to a Farm when the
+                        Farm is ready.
                       </Typography>
-                      <Button size="small" variant="outlined" onClick={() => navigate(`/farms/${farm.id}`)}>
-                        Open Farm
+                      <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        spacing={1}
+                      >
+                        <Button
+                          variant="outlined"
+                          startIcon={<Settings />}
+                          onClick={() =>
+                            navigate(
+                              `/controllers/${encodeURIComponent(
+                                controller.hw_id || controller.id,
+                              )}`,
+                            )
+                          }
+                        >
+                          Configure
+                        </Button>
+                        <Button
+                          variant="contained"
+                          startIcon={<Agriculture />}
+                          onClick={() => openFarmLink(controller)}
+                        >
+                          {farms.some((farm) => farm.role === "owner")
+                            ? "Link to Farm"
+                            : "Create Farm"}
+                        </Button>
+                      </Stack>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              );
+            })}
+
+            {rows.map(({ farm, connection, fieldSensors }) => {
+              const connectionStatus = simpleStatus(connection.status);
+              return (
+                <Card key={connection.id} variant="outlined">
+                  <CardContent>
+                    <Stack spacing={2}>
+                      <Stack
+                        direction="row"
+                        justifyContent="space-between"
+                        spacing={1}
+                        alignItems="flex-start"
+                      >
+                        <Box>
+                          <Typography variant="h6">
+                            {farm.name} connection
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Last update:{" "}
+                            {connection.last_seen
+                              ? new Date(connection.last_seen).toLocaleString()
+                              : "Waiting for signal"}
+                          </Typography>
+                        </Box>
+                        <Chip
+                          icon={<Wifi />}
+                          color={connectionStatus.color}
+                          label={connectionStatus.label}
+                        />
+                      </Stack>
+                      <Box>
+                        <Typography fontWeight={800} sx={{ mb: 1 }}>
+                          Field sensors
+                        </Typography>
+                        {fieldSensors.length === 0 ? (
+                          <Typography variant="body2" color="text.secondary">
+                            No field sensors found yet.
+                          </Typography>
+                        ) : (
+                          <Stack spacing={1}>
+                            {fieldSensors.map((sensor) => {
+                              const sensorStatus = simpleStatus(sensor.status);
+                              return (
+                                <Stack
+                                  key={sensor.id}
+                                  direction="row"
+                                  justifyContent="space-between"
+                                  spacing={1}
+                                  sx={{
+                                    p: 1.25,
+                                    borderRadius: 2,
+                                    bgcolor: "action.hover",
+                                  }}
+                                >
+                                  <Box>
+                                    <Typography fontWeight={700}>
+                                      {sensor.current_assignment?.field_name ||
+                                        sensor.label ||
+                                        "Sensor waiting for a Field"}
+                                    </Typography>
+                                    <Typography
+                                      variant="body2"
+                                      color="text.secondary"
+                                    >
+                                      {sensor.current_assignment?.field_name
+                                        ? "Field sensor"
+                                        : "Choose a Field during setup"}
+                                    </Typography>
+                                  </Box>
+                                  <Chip
+                                    size="small"
+                                    color={sensorStatus.color}
+                                    label={sensorStatus.label}
+                                  />
+                                </Stack>
+                              );
+                            })}
+                          </Stack>
+                        )}
+                      </Box>
+                      <Button
+                        variant="outlined"
+                        startIcon={<Settings />}
+                        onClick={() =>
+                          navigate(
+                            `/controllers/${encodeURIComponent(
+                              connection.legacy_controller_id ||
+                                connection.serial_number,
+                            )}`,
+                          )
+                        }
+                        sx={{ alignSelf: "flex-start" }}
+                      >
+                        Configure
                       </Button>
                     </Stack>
                   </CardContent>
                 </Card>
-              </Grid>
-            );
-          })}
-        </Grid>
-      )}
+              );
+            })}
+          </>
+        )}
+
+        <Dialog
+          open={Boolean(controllerToLink)}
+          onClose={() => !linking && setControllerToLink(null)}
+          fullWidth
+          maxWidth="xs"
+        >
+          <DialogTitle>Link device to Farm</DialogTitle>
+          <DialogContent>
+            <FormControl fullWidth sx={{ mt: 1 }}>
+              <InputLabel>Farm</InputLabel>
+              <Select
+                label="Farm"
+                value={selectedFarmId}
+                onChange={(event) => setSelectedFarmId(event.target.value)}
+                disabled={linking}
+              >
+                {farms
+                  .filter((farm) => farm.role === "owner")
+                  .map((farm) => (
+                    <MenuItem key={farm.id} value={farm.id}>
+                      {farm.name}
+                    </MenuItem>
+                  ))}
+              </Select>
+            </FormControl>
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={() => setControllerToLink(null)}
+              disabled={linking}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              onClick={linkToFarm}
+              disabled={linking || !selectedFarmId}
+            >
+              {linking ? "Linking…" : "Link device"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+        </Stack>
       </PageShell>
     </Container>
   );

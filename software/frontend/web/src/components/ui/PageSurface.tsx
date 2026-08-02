@@ -18,22 +18,10 @@ type PageShellProps = {
 export const PageShell: React.FC<PageShellProps> = ({ children, sx }) => (
   <Box
     sx={{
-      position: 'relative',
-      '&::before': {
-        content: '""',
-        position: 'absolute',
-        inset: { xs: '8px 8px auto 8px', md: '14px 18px auto 18px' },
-        height: { xs: 96, md: 128 },
-        borderRadius: 4,
-        background:
-          'linear-gradient(90deg, rgba(235, 79, 18, 0.07), rgba(108, 137, 48, 0.08) 55%, rgba(51, 122, 133, 0.06))',
-        pointerEvents: 'none',
-        zIndex: 0,
-      },
       ...sx,
     }}
   >
-    <Box sx={{ position: 'relative', zIndex: 1 }}>{children}</Box>
+    <Box>{children}</Box>
   </Box>
 );
 
@@ -49,7 +37,8 @@ export const PageHeaderPanel: React.FC<PageHeaderPanelProps> = ({ title, subtitl
   <Box
     sx={{
       mb: 3,
-      p: { xs: 2, md: 2.5 },
+      p: { xs: 1.5, md: 2 },
+      minHeight: { xs: 84, md: 102 },
       borderRadius: 4,
       border: '1px solid rgba(60, 57, 17, 0.1)',
       bgcolor: 'rgba(255, 253, 248, 0.9)',
@@ -68,7 +57,7 @@ export const PageHeaderPanel: React.FC<PageHeaderPanelProps> = ({ title, subtitl
           <Box
             sx={{
               width: 48,
-              height: 48,
+              height: 44,
               borderRadius: 2,
               display: 'grid',
               placeItems: 'center',

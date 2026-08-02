@@ -161,6 +161,59 @@ export interface FarmAlertFilters {
   status?: string;
 }
 
+export interface FarmAdvisorSummaryItem {
+  id: string;
+  field_id: string;
+  field_name: string;
+  crop_name: string;
+  observation: string;
+  advice: { status?: string; summary?: string; confidence?: string; actions_now?: string[] };
+  created_at: string;
+}
+
+export const getFarmAdvisorSummary = async (farmId: string): Promise<FarmAdvisorSummaryItem[]> => {
+  const response = await api.get<{ recommendations?: FarmAdvisorSummaryItem[] }>(API_ENDPOINTS.FARMS.ADVISOR(farmId));
+  return response.data.recommendations || [];
+};
+
+export interface FarmWeatherForecast { date: string; temperature_min_c: number; temperature_max_c: number; precipitation_mm: number; }
+
+export interface FarmWeatherSnapshot {
+  observed_at: string;
+  conditions: string;
+  temperature_c: number;
+  humidity_percent: number;
+  precipitation_mm: number;
+  wind_speed_kmh: number;
+  today?: FarmWeatherForecast;
+  next_days?: FarmWeatherForecast[];
+}
+
+export type FarmWeather = FarmWeatherSnapshot;
+
+export interface FarmMonitoringReading {
+  time: string;
+  sensor_id: string;
+  sensor_name: string;
+  type: string;
+  unit?: string | null;
+  value: number;
+  controller_id?: string | null;
+  field_id?: string | null;
+  field_name?: string | null;
+  quality?: string | null;
+}
+
+export const getFarmMonitoringReadings = async (farmId: string, hours = 24): Promise<FarmMonitoringReading[]> => {
+  const response = await api.get<{ readings?: FarmMonitoringReading[] }>(`/api/farms/${encodeURIComponent(farmId)}/monitoring/readings`, { params: { hours } });
+  return response.data.readings || [];
+};
+
+export const getFarmWeather = async (farmId: string): Promise<FarmWeatherSnapshot> => {
+  const response = await api.get<FarmWeatherSnapshot>(API_ENDPOINTS.FARMS.WEATHER(farmId));
+  return response.data;
+};
+
 export interface CreateFarmRequest {
   name: string;
   latitude?: number | null;
@@ -242,6 +295,10 @@ export const createFarm = async (data: CreateFarmRequest): Promise<Farm> => {
 export const updateFarm = async (farmId: string, data: CreateFarmRequest): Promise<Farm> => {
   const response = await api.put<Farm>(API_ENDPOINTS.FARMS.UPDATE(farmId), data);
   return response.data;
+};
+
+export const deleteFarm = async (farmId: string): Promise<void> => {
+  await api.delete(API_ENDPOINTS.FARMS.DELETE(farmId));
 };
 
 export const getFarmFields = async (farmId: string): Promise<Field[]> => {

@@ -1,12 +1,9 @@
 import axios, { AxiosInstance } from 'axios';
-import { Capacitor } from '@capacitor/core';
 import { API_BASE_URL } from '../config/api';
-import { capacitorHttpAdapter } from './capacitorHttpAdapter';
 
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 60000,
-  adapter: Capacitor.isNativePlatform() ? capacitorHttpAdapter : undefined,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },

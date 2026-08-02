@@ -1058,6 +1058,77 @@ func (h *ControllerHandler) DeleteHardwareSensorAPI(w http.ResponseWriter, r *ht
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// DeleteSensorAPI supports the frontend's controller-independent delete call.
+// Legacy sensors carry their owning controller_id, so resolve it first and
+// delegate to the same authorization and cleanup logic used by the controller
+// scoped endpoint.
+func (h *ControllerHandler) DeleteSensorAPI(w http.ResponseWriter, r *http.Request) {
+	accountID := GetAccountID(r).(uuid.UUID)
+	sensorID := strings.TrimSpace(chi.URLParam(r, "id"))
+	var controllerID uuid.UUID
+	err := h.db.QueryRow(r.Context(), `
+		SELECT c.id
+		FROM sensors s
+		JOIN controllers c ON c.id = s.controller_id
+		WHERE s.id = $1 AND c.account_id = $2
+	`, sensorID, accountID).Scan(&controllerID)
+	if err == pgx.ErrNoRows {
+		http.Error(w, "sensor not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "failed to find sensor controller", http.StatusInternalServerError)
+		return
+	}
+	ctx := chi.RouteContext(r.Context())
+	ctx.URLParams.Add("controllerId", controllerID.String())
+	ctx.URLParams.Add("sensorId", sensorID)
+	h.DeleteHardwareSensorAPI(w, r)
+}
+
+func (h *ControllerHandler) ControllerFieldLinksAPI(w http.ResponseWriter, r *http.Request) {
+	accountID := GetAccountID(r).(uuid.UUID)
+	controllerParam := strings.TrimSpace(chi.URLParam(r, "controllerId"))
+	controller, err := h.lookupAccountHardwareController(r.Context(), accountID, controllerParam)
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	rows, err := h.db.Query(r.Context(), `
+		SELECT sb.id, sb.serial_number, COALESCE(sb.label,''), sb.status, sb.last_seen,
+		       f.id, COALESCE(f.name,''), sba.monitoring_zone
+		FROM gateways g
+		JOIN sensor_bases sb ON sb.gateway_id=g.id
+		LEFT JOIN sensor_base_assignments sba ON sba.base_id=sb.id AND sba.unassigned_at IS NULL
+		LEFT JOIN fields f ON f.id=sba.field_id
+		WHERE g.legacy_controller_id=$1
+		ORDER BY COALESCE(f.name,''), sb.serial_number`, controller.id)
+	if err != nil {
+		http.Error(w, "failed to load controller field links", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	items := make([]map[string]any, 0)
+	for rows.Next() {
+		var baseID uuid.UUID
+		var serial, label, status string
+		var lastSeen *time.Time
+		var fieldID *uuid.UUID
+		var fieldName string
+		var zone *string
+		if err := rows.Scan(&baseID, &serial, &label, &status, &lastSeen, &fieldID, &fieldName, &zone); err != nil {
+			http.Error(w, "failed to read controller field links", http.StatusInternalServerError)
+			return
+		}
+		item := map[string]any{"base_id": baseID, "serial_number": serial, "label": label, "status": status, "last_seen": lastSeen, "field_name": fieldName, "monitoring_zone": zone}
+		if fieldID != nil {
+			item["field_id"] = *fieldID
+		}
+		items = append(items, item)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"sensor_bases": items})
+}
+
 func (h *ControllerHandler) ReleaseControllerAPI(w http.ResponseWriter, r *http.Request) {
 	accountID := GetAccountID(r).(uuid.UUID)
 	userID := GetUserID(r).(uuid.UUID)

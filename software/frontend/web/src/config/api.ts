@@ -22,6 +22,7 @@ export const API_ENDPOINTS = {
   CONTROLLERS: {
     LIST: '/controllers',
     GET: (id: string) => `/controllers/${id}`,
+    PAIR: '/controllers/pair',
     UPDATE: (id: string) => `/controllers/${id}`,
   },
   FARMS: {
@@ -29,6 +30,7 @@ export const API_ENDPOINTS = {
     CREATE: '/api/farms',
     GET: (id: string) => `/api/farms/${id}`,
     UPDATE: (id: string) => `/api/farms/${id}`,
+    DELETE: (id: string) => `/api/farms/${id}`,
     FIELDS: (id: string) => `/api/farms/${id}/fields`,
     CROPS: '/api/crops',
     FIELD_CROP_INSTANCES: (fieldId: string) => `/api/fields/${fieldId}/crop-instances`,
@@ -39,7 +41,9 @@ export const API_ENDPOINTS = {
     SENSOR_BASE_ASSIGNMENTS: (baseId: string) => `/api/sensor-bases/${baseId}/assignments`,
     SENSOR_MODULES: (baseId: string) => `/api/sensor-bases/${baseId}/modules`,
     ALERTS: (farmId: string) => `/api/farms/${farmId}/alerts`,
+    ADVISOR: (farmId: string) => `/api/farms/${farmId}/advisor/recommendations`,
     ACK_ALERT: (farmId: string, alertId: string) => `/api/farms/${farmId}/alerts/${alertId}/ack`,
+    WEATHER: (farmId: string) => `/api/farms/${farmId}/weather`,
     COLLABORATORS: (id: string) => `/api/farms/${id}/collaborators`,
     REMOVE_COLLABORATOR: (farmId: string, userId: string) => `/api/farms/${farmId}/collaborators/${userId}`,
   },

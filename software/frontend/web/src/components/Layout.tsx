@@ -14,8 +14,8 @@ import {
 } from '@mui/material';
 import {
   Agriculture,
-  Hub as ChipIcon,
-  Dashboard,
+  Sensors,
+  ShowChart,
   Notifications,
   AccountCircle,
   Groups,
@@ -23,12 +23,18 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 
+type AppRoute = {
+  label: string;
+  mobileLabel: string;
+  path: string;
+  icon: React.ReactNode;
+};
 
-const baseRoutes = [
-  { label: 'Farms', path: '/farms', icon: <Agriculture /> },
-  { label: 'Controllers', path: '/controllers', icon: <ChipIcon /> },
-  { label: 'Monitoring', path: '/monitoring', icon: <Dashboard /> },
-  { label: 'Alerts', path: '/alerts', icon: <Notifications /> },
+const baseRoutes: AppRoute[] = [
+  { label: 'Farms', mobileLabel: 'Farms', path: '/farms', icon: <Agriculture /> },
+  { label: 'Monitoring', mobileLabel: 'Live', path: '/monitoring', icon: <ShowChart /> },
+  { label: 'Hardware', mobileLabel: 'Hardware', path: '/hardware', icon: <Sensors /> },
+  { label: 'Alerts', mobileLabel: 'Alerts', path: '/alerts', icon: <Notifications /> },
 ];
 
 const getInitials = (name?: string) => {
@@ -53,22 +59,17 @@ const Layout: React.FC = () => {
   const routes = React.useMemo(
     () => [
       ...baseRoutes,
-      ...(accountRole === 'OWNER' ? [{ label: 'Team', path: '/team', icon: <Groups /> }] : []),
-      { label: 'Profile', path: '/profile', icon: <AccountCircle /> },
+      ...(accountRole === 'OWNER' ? [{ label: 'Team', mobileLabel: 'Team', path: '/team', icon: <Groups /> }] : []),
+      { label: 'Profile', mobileLabel: 'Profile', path: '/profile', icon: <AccountCircle /> },
     ],
     [accountRole]
   );
 
   React.useEffect(() => {
     const path = location.pathname;
-    if (path.startsWith('/farms')) setValue(0);
-    else if (path.startsWith('/controllers')) setValue(1);
-    else if (path.startsWith('/monitoring')) setValue(2);
-    else if (path.startsWith('/alerts')) setValue(3);
-    else {
-      const currentIndex = routes.findIndex((route) => path.startsWith(route.path));
-      setValue(currentIndex >= 0 ? currentIndex : 0);
-    }
+    const normalizedPath = path.startsWith('/controllers') ? '/hardware' : path;
+    const currentIndex = routes.findIndex((route) => normalizedPath.startsWith(route.path));
+    setValue(currentIndex >= 0 ? currentIndex : 0);
   }, [location, routes]);
 
   const handleChange = (_event: React.SyntheticEvent, newValue: number) => {
@@ -125,15 +126,6 @@ const Layout: React.FC = () => {
               flexDirection: 'column',
             }}
           >
-            <Box sx={{ mb: 3.5, px: 0.5 }}>
-              <Box
-                component="img"
-                src="/assets/spectron-logo-full.svg"
-                alt="Spectron"
-                sx={{ height: 28, width: 'auto', display: 'block' }}
-              />
-            </Box>
-
             <Stack spacing={1}>
               {routes.map((item, index) => (
                 <ButtonBase
@@ -252,14 +244,6 @@ const Layout: React.FC = () => {
             alignItems: 'center',
           }}
         >
-          {!isDesktop && (
-            <Box
-              component="img"
-              src="/assets/spectron-logo-full.svg"
-              alt="Spectron"
-              sx={{ height: 26, width: 'auto', display: 'block' }}
-            />
-          )}
         </Box>
         <Outlet />
       </Box>
@@ -290,10 +274,13 @@ const Layout: React.FC = () => {
               fontSize: 9,
               whiteSpace: 'nowrap',
             },
+            '& .MuiSvgIcon-root': {
+              fontSize: 22,
+            },
           }}
         >
           {routes.map((item) => (
-            <BottomNavigationAction key={item.path} label={item.label} icon={item.icon} />
+            <BottomNavigationAction key={item.path} label={item.mobileLabel} icon={item.icon} />
           ))}
         </BottomNavigation>
       )}

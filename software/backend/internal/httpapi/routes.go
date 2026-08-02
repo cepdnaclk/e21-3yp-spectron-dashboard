@@ -102,6 +102,7 @@ func RegisterRoutes(r chi.Router, db *pgxpool.Pool, allowedOrigins []string, raw
 			r.With(RequireAccountRole(db, "OWNER", "ADMIN")).Patch("/{controllerId}", controllerHandler.UpdateHardwareControllerAPI)
 			r.With(RequireAccountRole(db, "OWNER", "ADMIN")).Put("/{controllerId}", controllerHandler.UpdateHardwareControllerAPI)
 			r.Get("/{controllerId}/sensors", controllerHandler.ControllerSensorsAPI)
+			r.Get("/{controllerId}/field-links", controllerHandler.ControllerFieldLinksAPI)
 			r.With(RequireAccountRole(db, "OWNER", "ADMIN")).Delete("/{controllerId}/claim", controllerHandler.ReleaseControllerAPI)
 			r.With(RequireAccountRole(db, "OWNER", "ADMIN")).Delete("/{controllerId}/sensors/{sensorId}", controllerHandler.DeleteHardwareSensorAPI)
 			r.With(RequireAccountRole(db, "OWNER", "ADMIN")).Patch("/{controllerId}/sensors/{sensorId}", controllerHandler.UpdateHardwareSensorAPI)
@@ -132,6 +133,7 @@ func RegisterRoutes(r chi.Router, db *pgxpool.Pool, allowedOrigins []string, raw
 			r.Route("/{farmId}", func(r chi.Router) {
 				r.Get("/", farmHandler.Get)
 				r.Put("/", farmHandler.Update)
+				r.Delete("/", farmHandler.Delete)
 				r.Get("/collaborators", farmHandler.ListCollaborators)
 				r.Post("/collaborators", farmHandler.AddCollaborator)
 				r.Delete("/collaborators/{userId}", farmHandler.RemoveCollaborator)
@@ -140,6 +142,8 @@ func RegisterRoutes(r chi.Router, db *pgxpool.Pool, allowedOrigins []string, raw
 				r.Get("/sensor-bases", farmHandler.ListSensorBases)
 				r.Post("/sensor-bases", farmHandler.CreateSensorBase)
 				r.Get("/alerts", alertHandler.ListFarmAlerts)
+				r.Get("/advisor/recommendations", farmHandler.ListFarmAdvisorSummary)
+				r.Get("/monitoring/readings", farmHandler.ListFarmMonitoringReadings)
 				r.Post("/alerts/{alertId}/ack", alertHandler.AcknowledgeFarmAlert)
 				r.Get("/fields", farmHandler.ListFields)
 				r.Post("/fields", farmHandler.CreateField)
@@ -153,6 +157,17 @@ func RegisterRoutes(r chi.Router, db *pgxpool.Pool, allowedOrigins []string, raw
 		r.Route("/api/fields/{fieldId}/crop-instances", func(r chi.Router) {
 			r.Get("/", farmHandler.ListCropInstances)
 			r.Post("/", farmHandler.CreateCropInstance)
+		})
+		r.Route("/api/fields/{fieldId}/advisor/recommendations", func(r chi.Router) {
+			r.Get("/", farmHandler.ListFieldAdvice)
+			r.Post("/", farmHandler.GenerateFieldAdvice)
+		})
+		r.Route("/api/fields/{fieldId}/problems", func(r chi.Router) {
+			r.Get("/", farmHandler.ListFieldProblems)
+			r.Post("/", farmHandler.CreateFieldProblem)
+			r.Get("/{problemId}", farmHandler.GetFieldProblem)
+			r.Post("/{problemId}/responses", farmHandler.AnswerFieldProblem)
+			r.Post("/{problemId}/resolve", farmHandler.ResolveFieldProblem)
 		})
 		r.Post("/api/crop-instances/{cropInstanceId}/stage-confirmation", farmHandler.ConfirmGrowthStage)
 
@@ -177,6 +192,7 @@ func RegisterRoutes(r chi.Router, db *pgxpool.Pool, allowedOrigins []string, raw
 		})
 		r.Route("/sensors", func(r chi.Router) {
 			r.Get("/{id}", sensorHandler.Get)
+			r.With(RequireAccountRole(db, "OWNER", "ADMIN")).Delete("/{id}", controllerHandler.DeleteSensorAPI)
 			r.Get("/{id}/attendance", sensorHandler.GetAttendanceState)
 			r.With(RequireAccountRole(db, "OWNER", "ADMIN")).Post("/{id}/attendance/reset", sensorHandler.ResetAttendance)
 			r.Get("/{id}/learning-phase", sensorHandler.GetLearningPhaseStatus)

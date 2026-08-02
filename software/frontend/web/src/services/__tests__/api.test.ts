@@ -66,6 +66,3 @@ describe('api helper', () => {
     window.location = originalLocation;
   });
 });
-
-export {};
-

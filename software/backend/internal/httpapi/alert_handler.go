@@ -139,16 +139,17 @@ func (h *AlertHandler) ListFarmAlerts(w http.ResponseWriter, r *http.Request) {
 			a.severity,
 			a.message,
 			a.source_ref,
-			a.status,
+			CASE WHEN ar.read_at IS NOT NULL OR ar.dismissed_at IS NOT NULL THEN 'acknowledged' ELSE 'open' END,
 			a.created_at,
-			a.acknowledged_at,
+			ar.read_at,
 			a.expires_at
 		FROM alerts a
 		LEFT JOIN fields f ON f.id = a.field_id
+		LEFT JOIN alert_recipients ar ON ar.alert_id=a.id AND ar.user_id=$2
 		WHERE a.farm_id = $1
 	`
-	args := []any{access.farmID}
-	argPos := 2
+	args := []any{access.farmID, access.userID}
+	argPos := 3
 
 	if fieldRef := strings.TrimSpace(r.URL.Query().Get("field_id")); fieldRef != "" {
 		fieldID, err := uuid.Parse(fieldRef)
@@ -171,7 +172,7 @@ func (h *AlertHandler) ListFarmAlerts(w http.ResponseWriter, r *http.Request) {
 		argPos++
 	}
 	if status := strings.TrimSpace(r.URL.Query().Get("status")); status != "" {
-		query += fmt.Sprintf(" AND a.status = $%d", argPos)
+		query += fmt.Sprintf(" AND (CASE WHEN ar.read_at IS NOT NULL OR ar.dismissed_at IS NOT NULL THEN 'acknowledged' ELSE 'open' END) = $%d", argPos)
 		args = append(args, status)
 		argPos++
 	}
@@ -203,7 +204,7 @@ func (h *AlertHandler) ListFarmAlerts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AlertHandler) AcknowledgeFarmAlert(w http.ResponseWriter, r *http.Request) {
-	access, ok := (&FarmHandler{db: h.db}).requireFarmAccess(w, r, true)
+	access, ok := (&FarmHandler{db: h.db}).requireFarmAccess(w, r, false)
 	if !ok {
 		return
 	}
@@ -215,12 +216,11 @@ func (h *AlertHandler) AcknowledgeFarmAlert(w http.ResponseWriter, r *http.Reque
 	}
 
 	tag, err := h.db.Exec(r.Context(), `
-		UPDATE alerts
-		SET acknowledged_at = COALESCE(acknowledged_at, NOW()),
-		    status = 'acknowledged'
-		WHERE id = $1
-		  AND farm_id = $2
-	`, alertID, access.farmID)
+		INSERT INTO alert_recipients (alert_id,user_id,read_at)
+		SELECT a.id,$3,NOW() FROM alerts a
+		WHERE a.id=$1 AND a.farm_id=$2
+		ON CONFLICT (alert_id,user_id) DO UPDATE SET read_at=COALESCE(alert_recipients.read_at,NOW())
+	`, alertID, access.farmID, access.userID)
 	if err != nil {
 		http.Error(w, "failed to acknowledge alert", http.StatusInternalServerError)
 		return
@@ -230,7 +230,7 @@ func (h *AlertHandler) AcknowledgeFarmAlert(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	alert, err := h.loadFarmAlert(r.Context(), alertID, access.farmID)
+	alert, err := h.loadFarmAlert(r.Context(), alertID, access.farmID, access.userID)
 	if err != nil {
 		http.Error(w, "failed to load alert", http.StatusInternalServerError)
 		return
@@ -278,7 +278,7 @@ func (h *AlertHandler) Acknowledge(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
-func (h *AlertHandler) loadFarmAlert(ctx context.Context, alertID uuid.UUID, farmID uuid.UUID) (farmAlertResponse, error) {
+func (h *AlertHandler) loadFarmAlert(ctx context.Context, alertID uuid.UUID, farmID uuid.UUID, userID uuid.UUID) (farmAlertResponse, error) {
 	alert, err := scanFarmAlert(h.db.QueryRow(ctx, `
 		SELECT
 			a.id,
@@ -291,15 +291,16 @@ func (h *AlertHandler) loadFarmAlert(ctx context.Context, alertID uuid.UUID, far
 			a.severity,
 			a.message,
 			a.source_ref,
-			a.status,
+			CASE WHEN ar.read_at IS NOT NULL OR ar.dismissed_at IS NOT NULL THEN 'acknowledged' ELSE 'open' END,
 			a.created_at,
-			a.acknowledged_at,
+			ar.read_at,
 			a.expires_at
 		FROM alerts a
 		LEFT JOIN fields f ON f.id = a.field_id
+		LEFT JOIN alert_recipients ar ON ar.alert_id=a.id AND ar.user_id=$3
 		WHERE a.id = $1
 		  AND a.farm_id = $2
-	`, alertID, farmID))
+	`, alertID, farmID, userID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return farmAlertResponse{}, err

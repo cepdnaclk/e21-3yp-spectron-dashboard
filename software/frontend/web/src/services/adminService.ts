@@ -9,8 +9,8 @@ export interface AdminOverview {
   configuredSensors: number;
   unconfiguredSensors: number;
   farmControllers?: number;
-  legacyOnlyDevices?: number;
   sensorBases?: number;
+  legacyOnlyDevices?: number;
 }
 
 export interface AdminDevice {
@@ -19,18 +19,15 @@ export interface AdminDevice {
   name: string;
   location?: string;
   status: string;
-  claimStatus: 'CLAIMED' | 'UNCLAIMED';
-  operationalStatus: 'ONLINE' | 'OFFLINE' | 'PENDING_CONFIG' | 'ERROR';
   ownerEmail?: string;
   sensorCount: number;
   configuredSensors: number;
   lastSeen?: string;
   updatedAt?: string;
-  farmId?: string;
-  farmName?: string;
-  gatewayId?: string;
+  architectureState?: string;
   sensorBaseCount?: number;
-  architectureState?: 'farm_attached' | 'legacy_claimed' | 'unclaimed_inventory' | string;
+  farmName?: string;
+  operationalStatus?: string;
 }
 
 export interface CreateAdminDeviceRequest {
@@ -68,6 +65,35 @@ export interface AdminOwner {
   createdAt: string;
 }
 
+export interface AdminAuditEvent {
+  id: string;
+  actorEmail?: string;
+  actorName?: string;
+  action: string;
+  targetType?: string;
+  targetId?: string;
+  targetLabel?: string;
+  summary?: string;
+  createdAt: string;
+  metadata?: Record<string, unknown>;
+  ipAddress?: string;
+  outcome?: string;
+  details?: Record<string, unknown>;
+  userAgent?: string;
+}
+
+export interface AdminAuditQuery {
+  limit?: number;
+  offset?: number;
+  action?: string;
+  search?: string;
+}
+
+export interface AdminAuditResponse {
+  events: AdminAuditEvent[];
+  total: number;
+}
+
 export interface CreateOwnerRequest {
   email: string;
   password: string;
@@ -80,28 +106,6 @@ export interface AdminSystemHealth {
   apiStatus: string;
   databaseStatus: string;
   serverTime: string;
-}
-
-export interface AdminAuditEvent {
-  id: string;
-  actorUserId?: string;
-  actorEmail: string;
-  action: string;
-  targetType: string;
-  targetId?: string;
-  targetLabel?: string;
-  outcome: string;
-  details: Record<string, unknown>;
-  ipAddress?: string;
-  userAgent?: string;
-  createdAt: string;
-}
-
-export interface AdminAuditResponse {
-  events: AdminAuditEvent[];
-  total: number;
-  limit: number;
-  offset: number;
 }
 
 export const getAdminOverview = async (): Promise<AdminOverview> => {
@@ -144,21 +148,27 @@ export const rejectAdminOwner = async (ownerId: string): Promise<void> => {
   await api.patch(`/api/admin/owners/${encodeURIComponent(ownerId)}/reject`);
 };
 
-export const deleteAdminOwner = async (ownerId: string): Promise<void> => {
-  await api.delete(`/api/admin/owners/${encodeURIComponent(ownerId)}`);
-};
-
 export const getAdminSystemHealth = async (): Promise<AdminSystemHealth> => {
   const response = await api.get<AdminSystemHealth>('/api/admin/system');
   return response.data;
 };
 
-export const getAdminAuditEvents = async (params: {
-  limit?: number;
-  offset?: number;
-  action?: string;
-  search?: string;
-} = {}): Promise<AdminAuditResponse> => {
-  const response = await api.get<AdminAuditResponse>('/api/admin/audit', { params });
-  return response.data;
+export const getAdminAuditEvents = async (query: AdminAuditQuery = {}): Promise<AdminAuditResponse> => {
+  const response = await api.get<{ events?: AdminAuditEvent[]; total?: number } | AdminAuditEvent[]>('/api/admin/audit', {
+    params: query,
+  });
+  if (Array.isArray(response.data)) {
+    return {
+      events: response.data,
+      total: response.data.length,
+    };
+  }
+  return {
+    events: response.data.events || [],
+    total: response.data.total ?? (response.data.events || []).length,
+  };
+};
+
+export const deleteAdminOwner = async (ownerId: string): Promise<void> => {
+  await api.delete(`/api/admin/owners/${encodeURIComponent(ownerId)}`);
 };

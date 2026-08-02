@@ -157,6 +157,10 @@ func (h *FarmHandler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if req.Latitude == nil || req.Longitude == nil {
+		http.Error(w, "farm location is required for weather information", http.StatusBadRequest)
+		return
+	}
 
 	tx, err := h.db.Begin(r.Context())
 	if err != nil {
@@ -278,6 +282,29 @@ func (h *FarmHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	notifyCustomerChange(r, access.farmID, "farm.updated")
 	writeJSON(w, http.StatusOK, farm)
+}
+
+// Delete archives a farm instead of physically deleting its history. All
+// customer access stops immediately because farm access resolution excludes
+// archived farms.
+func (h *FarmHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	access, ok := h.requireFarmAccess(w, r, true)
+	if !ok {
+		return
+	}
+	result, err := h.db.Exec(r.Context(), `
+		UPDATE farms SET archived_at=NOW(), updated_at=NOW()
+		WHERE id=$1 AND archived_at IS NULL`, access.farmID)
+	if err != nil {
+		http.Error(w, "failed to delete farm", http.StatusInternalServerError)
+		return
+	}
+	if result.RowsAffected() == 0 {
+		http.Error(w, "farm not found", http.StatusNotFound)
+		return
+	}
+	notifyCustomerChange(r, access.farmID, "farm.deleted")
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *FarmHandler) ListFields(w http.ResponseWriter, r *http.Request) {
@@ -531,11 +558,12 @@ func (h *FarmHandler) RemoveCollaborator(w http.ResponseWriter, r *http.Request)
 
 	var role string
 	err = h.db.QueryRow(r.Context(), `
-		SELECT role
-		FROM farm_access
-		WHERE farm_id = $1
-		  AND user_id = $2
-		  AND revoked_at IS NULL
+		SELECT fa.role
+		FROM farm_access fa
+		JOIN farms f ON f.id=fa.farm_id AND f.archived_at IS NULL
+		WHERE fa.farm_id = $1
+		  AND fa.user_id = $2
+		  AND fa.revoked_at IS NULL
 	`, access.farmID, targetUserID).Scan(&role)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

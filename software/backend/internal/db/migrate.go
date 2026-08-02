@@ -72,11 +72,29 @@ var migration019AgriAssistCropReferenceSeed string
 //go:embed migrations/020_crop_instance_active_guard.sql
 var migration020CropInstanceActiveGuard string
 
+//go:embed migrations/021_crop_knowledge.sql
+var migration021CropKnowledge string
+
+//go:embed migrations/022_advisor_recommendations.sql
+var migration022AdvisorRecommendations string
+
+//go:embed migrations/023_agriculture_sensor_types.sql
+var migration023AgricultureSensorTypes string
+
 //go:embed migrations/021_sensor_channel_readings_compat.sql
 var migration021SensorChannelReadingsCompat string
 
 //go:embed migrations/022_farm_location_metadata.sql
 var migration022FarmLocationMetadata string
+
+//go:embed migrations/024_crop_growth_stage_choices.sql
+var migration024CropGrowthStageChoices string
+
+//go:embed migrations/025_field_problems.sql
+var migration025FieldProblems string
+
+//go:embed migrations/026_alert_recipient_state.sql
+var migration026AlertRecipientState string
 
 type migration struct {
 	name string
@@ -104,8 +122,14 @@ var startupMigrations = []migration{
 	{name: "018_agriassist_farm_foundation", sql: migration018AgriAssistFarmFoundation},
 	{name: "019_agriassist_crop_reference_seed", sql: migration019AgriAssistCropReferenceSeed},
 	{name: "020_crop_instance_active_guard", sql: migration020CropInstanceActiveGuard},
+	{name: "021_crop_knowledge", sql: migration021CropKnowledge},
+	{name: "022_advisor_recommendations", sql: migration022AdvisorRecommendations},
+	{name: "023_agriculture_sensor_types", sql: migration023AgricultureSensorTypes},
 	{name: "021_sensor_channel_readings_compat", sql: migration021SensorChannelReadingsCompat},
 	{name: "022_farm_location_metadata", sql: migration022FarmLocationMetadata},
+	{name: "024_crop_growth_stage_choices", sql: migration024CropGrowthStageChoices},
+	{name: "025_field_problems", sql: migration025FieldProblems},
+	{name: "026_alert_recipient_state", sql: migration026AlertRecipientState},
 }
 
 func ApplyStartupMigrations(ctx context.Context, pool *pgxpool.Pool) error {
