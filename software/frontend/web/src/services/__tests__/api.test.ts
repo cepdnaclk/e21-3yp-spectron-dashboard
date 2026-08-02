@@ -28,7 +28,7 @@ describe('api helper', () => {
       },
     }));
 
-    const apiModule = await import('../api');
+    const apiModule = await import('../api.js');
 
     return { apiModule, handlers };
   };
@@ -63,6 +63,9 @@ describe('api helper', () => {
     expect(apiModule.getToken('user')).toBeNull();
     expect(window.location.href).toBe('/signin');
 
-    window.location = originalLocation;
+    (window as any).location = originalLocation;
   });
 });
+
+export {};
+
