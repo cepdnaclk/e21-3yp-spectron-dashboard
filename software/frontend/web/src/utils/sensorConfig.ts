@@ -1763,8 +1763,10 @@ const recommendedAlertThresholds = (
       return { belowWarning: 18, belowCritical: 15, aboveWarning: 25, aboveCritical: 28 };
     case 'humidity':
       return { belowWarning: 30, belowCritical: 20, aboveWarning: 70, aboveCritical: 80 };
+    case 'pressure':
+      return { belowWarning: 980, belowCritical: 950, aboveWarning: 1030, aboveCritical: 1060 };
     case 'distance':
-      return { aboveWarning: 100, aboveCritical: 150 };
+      return { belowWarning: 120, belowCritical: 80 };
     case 'fill_level':
       return { aboveWarning: 80, aboveCritical: 90 };
     case 'occupancy_count':
@@ -2121,6 +2123,29 @@ const alertTemplateValuesForMetric = (
           critical_label: 'Critical at or above',
         },
       ];
+    case 'pressure':
+      return [
+        {
+          key: `${metricKey}_low_band`,
+          label: 'Pressure Too Low',
+          metric_key: metricKey,
+          condition: 'below',
+          unit,
+          description: 'Warn when pressure drops below the expected crop-monitoring range.',
+          warning_label: 'Review at or below',
+          critical_label: 'Critical at or below',
+        },
+        {
+          key: `${metricKey}_high_band`,
+          label: 'Pressure Too High',
+          metric_key: metricKey,
+          condition: 'above',
+          unit,
+          description: 'Warn when pressure rises above the expected crop-monitoring range.',
+          warning_label: 'Review at or above',
+          critical_label: 'Critical at or above',
+        },
+      ];
     case 'fill_level':
       return [
         {
@@ -2218,16 +2243,16 @@ const alertTemplateValuesForMetric = (
       return [
         {
           key: `${metricKey}_limit_band`,
-          label: profile === 'event_timeline' ? 'Distance Crossing Event' : 'Distance Limit Alert',
+          label: profile === 'event_timeline' ? 'Gate Detection Event' : 'Gate Security Alert',
           metric_key: metricKey,
-          condition: 'above',
+          condition: 'below',
           unit,
           description:
             profile === 'event_timeline'
-              ? 'Escalate when the measured distance crosses the event threshold.'
-              : 'Warn when the measured distance exceeds the configured limit.',
-          warning_label: 'Review at or above',
-          critical_label: 'Critical at or above',
+              ? 'Escalate when an object comes inside the configured gate distance.'
+              : 'Warn when an object comes inside the configured gate distance.',
+          warning_label: 'Watch at or below',
+          critical_label: 'Intrusion at or below',
         },
       ];
   }

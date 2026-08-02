@@ -101,18 +101,19 @@ func (p fallbackProvider) Generate(ctx context.Context, input Request) (Result, 
 	return Result{}, err
 }
 
-// NewProvider selects Gemini when explicitly configured (or when only a
-// Gemini key is present), while retaining Groq compatibility for existing
-// deployments. If both keys exist, a transient primary failure falls back to
-// the other provider.
+// NewProvider prefers Groq for every AI-backed product flow. Gemini remains
+// only as a fallback when a Groq key is not available.
 func NewProvider() Provider {
-	gemini := NewGeminiProvider()
-	groq := NewGroqProvider()
-	preferGemini := strings.EqualFold(strings.TrimSpace(os.Getenv("AI_PROVIDER")), "gemini") || (gemini.Key != "" && groq.Key == "")
-	if preferGemini {
-		if groq.Key != "" {
-			return fallbackProvider{primary: gemini, secondary: groq}
-		}
+    gemini := NewGeminiProvider()
+    groq := NewGroqProvider()
+    if groq.Key != "" {
+        if gemini.Key != "" {
+            return fallbackProvider{primary: groq, secondary: gemini}
+        }
+        return groq
+    }
+    return gemini
+}
 		return gemini
 	}
 	if gemini.Key != "" {

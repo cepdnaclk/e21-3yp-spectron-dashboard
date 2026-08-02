@@ -91,7 +91,7 @@ const resolveSensorDisplayGroup = (
 const Monitoring: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const navigationState = location.state as { farmId?: string; fieldId?: string } | null;
+  const navigationState = location.state as { farmId?: string; fieldId?: string; configurationSaved?: boolean; configuredSensorId?: string; configuredSensorName?: string; observationMessage?: string } | null;
   const [farms, setFarms] = useState<Farm[]>([]);
   const [farmId, setFarmId] = useState(navigationState?.farmId || '');
   const [fields, setFields] = useState<Field[]>([]);
@@ -280,7 +280,7 @@ const Monitoring: React.FC = () => {
                     <Typography variant="h5">{group.fieldName}</Typography>
                     <Typography variant="body2" color="text.secondary">
                       {group.measurements.length > 0
-                        ? `${group.measurements.length} measurements · ${group.controllerCount} ${group.controllerCount === 1 ? 'Controller' : 'Controllers'}`
+                        ? `${group.measurements.length} measurements Ã‚Â· ${group.controllerCount} ${group.controllerCount === 1 ? 'Controller' : 'Controllers'}`
                         : 'No recent readings'}
                     </Typography>
                   </Box>
@@ -376,11 +376,13 @@ const Monitoring: React.FC = () => {
                                           returnTo: '/monitoring',
                                           controllerId: sensorControllerId,
                                           sensorId: latest.sensor_id,
+                                          sensorName: sensorLabel(sensor, latest),
+                                          openSection: 'alerts',
                                         },
                                       },
                                     )}
                                   >
-                                    Configure
+                                    Alert limits
                                   </Button>
                                 </Stack>
                               </Stack>

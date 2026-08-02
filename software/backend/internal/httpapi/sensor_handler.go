@@ -1141,7 +1141,7 @@ func needsEnvironmentDetails(ctx *models.SensorContext, combinedText string) boo
 var (
 	physicalScalePattern = regexp.MustCompile(`\b\d+(?:\.\d+)?\s*(cm|mm|m|meter|meters|metre|metres|ft|feet|inch|inches|l|litre|litres|liter|liters|gallon|gallons)\b`)
 	percentagePattern    = regexp.MustCompile(`\b\d+(?:\.\d+)?\s*%\b`)
-	rangePattern         = regexp.MustCompile(`\b\d+(?:\.\d+)?\s*(?:to|-|–)\s*\d+(?:\.\d+)?\b`)
+	rangePattern         = regexp.MustCompile(`\b\d+(?:\.\d+)?\s*(?:to|-|â€“)\s*\d+(?:\.\d+)?\b`)
 	timingPattern        = regexp.MustCompile(`\b\d+(?:\.\d+)?\s*(second|seconds|sec|secs|minute|minutes|min|mins|hour|hours|hr|hrs)\b`)
 	countPattern         = regexp.MustCompile(`\b\d+(?:\.\d+)?\s*(people|person|students|student|visitors|visitor|cars|car|vehicles|vehicle|items|item|seats|seat)\b`)
 )
@@ -1173,13 +1173,8 @@ func hasCountHint(text string) bool {
 }
 
 func (h *SensorHandler) generateHostedAISuggestion(ctx context.Context, sensorType string, req models.AISuggestRequest, historySummary string) (models.SensorConfig, string, error) {
-	provider := configuredAIProvider()
-
-	if provider == "groq" {
-		return h.generateOpenAIAISuggestion(ctx, sensorType, req, historySummary)
-	}
-
-	return models.SensorConfig{}, "", fmt.Errorf("unsupported AI provider %q", provider)
+    return h.generateOpenAIAISuggestion(ctx, sensorType, req, historySummary)
+}
 }
 
 func generatePremiumExplanation(sensorType string, req models.AISuggestRequest, config models.SensorConfig) string {
@@ -1550,7 +1545,7 @@ func (h *SensorHandler) generateOpenAIAISuggestion(ctx context.Context, sensorTy
 	provider := configuredAIProvider()
 	apiKey := openAICompatibleAPIKey(provider)
 	if apiKey == "" {
-		return models.SensorConfig{}, "", fmt.Errorf("OpenAI-compatible API key not configured")
+		return models.SensorConfig{}, "", fmt.Errorf("GROQ_API_KEY is not configured")
 	}
 
 	model := openAICompatibleModel(provider)
@@ -1602,16 +1597,12 @@ func (h *SensorHandler) generateOpenAIAISuggestion(ctx context.Context, sensorTy
 		return models.SensorConfig{}, "", err
 	}
 
-	config, explanation := buildHostedAIConfig(sensorType, suggestion, fmt.Sprintf("OpenAI-compatible model (%s)", model))
+	config, explanation := buildHostedAIConfig(sensorType, suggestion, fmt.Sprintf("Groq model (%s)", model))
 	return config, explanation, nil
 }
 
 func configuredAIProvider() string {
-	provider := strings.ToLower(strings.TrimSpace(os.Getenv("AI_PROVIDER")))
-	if provider == "" {
-		return "groq"
-	}
-	return provider
+    return "groq"
 }
 
 func openAICompatibleAPIKey(provider string) string {
@@ -1660,7 +1651,7 @@ func callOpenAIChatCompletions(ctx context.Context, baseURL string, apiKey strin
 	}
 
 	if httpResp.StatusCode < 200 || httpResp.StatusCode >= 300 {
-		return nil, fmt.Errorf("OpenAI-compatible API error: %s | %s", httpResp.Status, string(respBody))
+		return nil, fmt.Errorf("Groq API error: %s | %s", httpResp.Status, string(respBody))
 	}
 
 	return respBody, nil
@@ -1764,7 +1755,7 @@ func callGeminiGenerate(ctx context.Context, baseURL string, apiKey string, mode
 			bodySnippet = bodySnippet[:300]
 		}
 
-		// Don't retry on 429 (quota exhaustion) — it just wastes more quota.
+		// Don't retry on 429 (quota exhaustion) â€” it just wastes more quota.
 		if status >= 500 && attempt < maxAttempts {
 			retryAfter := retryAfterDuration(httpResp.Header.Get("Retry-After"))
 			if retryAfter <= 0 {
@@ -1888,7 +1879,7 @@ func ollamaMaxAttempts() int {
 }
 
 func shouldTryNextGeminiModel(errText string) bool {
-	// Don't try next model on 429 — quota is per-key, not per-model.
+	// Don't try next model on 429 â€” quota is per-key, not per-model.
 	return strings.Contains(errText, "404") ||
 		strings.Contains(errText, "500") ||
 		strings.Contains(errText, "502") ||

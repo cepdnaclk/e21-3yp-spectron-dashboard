@@ -36,7 +36,7 @@ func TestGroqAISuggestionIntegration(t *testing.T) {
 			},
 		}
 
-		config, explanation, err := handler.generateOpenAIAISuggestion(ctx, "temperature_humidity", req, "No historical summary available")
+		config, explanation, err := handler.generateGroqAISuggestion(ctx, "temperature_humidity", req, "No historical summary available")
 		if err != nil {
 			t.Fatalf("Failed to generate AI suggestion: %v", err)
 		}
@@ -71,7 +71,7 @@ func TestGroqAISuggestionIntegration(t *testing.T) {
 			},
 		}
 
-		config, explanation, err := handler.generateOpenAIAISuggestion(ctx, "distance", req, "No historical summary available")
+		config, explanation, err := handler.generateGroqAISuggestion(ctx, "distance", req, "No historical summary available")
 		if err != nil {
 			t.Fatalf("Failed to generate AI suggestion: %v", err)
 		}
@@ -132,3 +132,4 @@ func formatFloatPtr(p *float64) string {
 	}
 	return fmt.Sprintf("%.2f", *p)
 }
+
